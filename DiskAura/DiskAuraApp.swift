@@ -16,6 +16,7 @@ struct DiskAuraApp: App {
                 .preferredColorScheme(.dark)
                 .onAppear { menuBarMonitor.start(); AppRemovalWatcher.shared.start() }
         }
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .commands {
             // Discoverable View menu with Cmd+1…N to jump between modules — the canonical

@@ -178,7 +178,7 @@ struct ContentView: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 15)
-            .padding(.top, 16)
+            .padding(.top, 40)   // clear the floating traffic-light buttons (hidden title bar)
             .padding(.bottom, 14)
 
             // Scrollable nav — the module list can be taller than the window, so it scrolls

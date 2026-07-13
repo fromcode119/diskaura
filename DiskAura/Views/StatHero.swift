@@ -38,14 +38,19 @@ struct StatHero: View {
                 DonutLegend(segments: segments).frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(16)
-            .frame(width: Self.donutCardWidth, height: Self.height, alignment: .center)
+            // Flexible (not a hard 430pt) so on a narrower window the donut card shrinks and the
+            // stat tiles stay fully visible instead of overflowing off the window edge.
+            .frame(minWidth: 300, maxWidth: Self.donutCardWidth)
+            .frame(height: Self.height, alignment: .center)
             .glassCard()
 
             VStack(spacing: Self.rowGap) {
                 HStack(spacing: 12) { tile(at: 0); tile(at: 1) }
                 HStack(spacing: 12) { tile(at: 2); tile(at: 3) }
             }
+            .frame(minWidth: 260)
         }
+        .frame(maxWidth: .infinity)
         .frame(height: Self.height)
     }
 

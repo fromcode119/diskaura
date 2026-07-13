@@ -182,15 +182,14 @@ extension View {
 struct AuraBackground: View {
     var body: some View {
         ZStack {
-            Color(red: 0.045, green: 0.045, blue: 0.075)
-            RadialGradient(colors: [Color(red: 0.30, green: 0.46, blue: 1.00).opacity(0.55), .clear],
-                           center: UnitPoint(x: 0.05, y: -0.08), startRadius: 0, endRadius: 720)
-            RadialGradient(colors: [Color(red: 0.80, green: 0.34, blue: 0.98).opacity(0.42), .clear],
-                           center: UnitPoint(x: 1.02, y: -0.02), startRadius: 0, endRadius: 720)
-            RadialGradient(colors: [Color(red: 0.16, green: 0.82, blue: 0.88).opacity(0.22), .clear],
-                           center: UnitPoint(x: 0.75, y: 1.08), startRadius: 0, endRadius: 640)
-            RadialGradient(colors: [Color(red: 1.00, green: 0.42, blue: 0.72).opacity(0.16), .clear],
-                           center: UnitPoint(x: 0.30, y: 1.10), startRadius: 0, endRadius: 560)
+            // Deep indigo-black base — not neutral grey, which reads flat/generic.
+            Color(red: 0.038, green: 0.040, blue: 0.062)
+            // One dominant, deep blue glow from the top — the app's signature light source.
+            RadialGradient(colors: [Color(red: 0.20, green: 0.34, blue: 0.92).opacity(0.40), .clear],
+                           center: UnitPoint(x: 0.16, y: -0.12), startRadius: 0, endRadius: 820)
+            // A restrained violet counter-glow, low and to the right, for subtle depth.
+            RadialGradient(colors: [Color(red: 0.44, green: 0.24, blue: 0.74).opacity(0.30), .clear],
+                           center: UnitPoint(x: 1.06, y: 1.08), startRadius: 0, endRadius: 780)
         }
         .ignoresSafeArea()
     }
