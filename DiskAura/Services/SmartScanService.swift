@@ -24,13 +24,12 @@ enum SmartScanService {
     }
 
     private static func junkFinding() async -> SmartFinding? {
-        await Task.detached(priority: .utility) {
-            let bytes = JunkScanner.scan().reduce(Int64(0)) { $0 + $1.totalBytes }
-            guard bytes > 0 else { return nil }
-            return SmartFinding(id: "junk", title: "System junk",
-                                detail: "Caches, logs and developer junk",
-                                bytes: bytes, icon: "sparkles", tab: .cleanup)
-        }.value
+        // Populate the shared store so opening Cleanup afterwards reuses this scan (no re-scan).
+        let bytes = await JunkScanStore.shared.scan().reduce(Int64(0)) { $0 + $1.totalBytes }
+        guard bytes > 0 else { return nil }
+        return SmartFinding(id: "junk", title: "System junk",
+                            detail: "Caches, logs and developer junk",
+                            bytes: bytes, icon: "sparkles", tab: .cleanup)
     }
 
     private static func browserCacheFinding() async -> SmartFinding? {
