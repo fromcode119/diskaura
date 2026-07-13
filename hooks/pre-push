@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Block direct pushes to main/master — use a feature branch + PR instead.
+# Free, client-side enforcement (works on any GitHub plan). Activate once per clone with:
+#   git config core.hooksPath hooks
+# Emergency override (use sparingly): git push --no-verify
+protected='^refs/heads/(main|master)$'
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" =~ $protected ]]; then
+    branch="${remote_ref#refs/heads/}"
+    echo "✋ Direct pushes to '$branch' are blocked."
+    echo "   Create a branch and open a PR instead:"
+    echo "     git switch -c my-change && git push -u origin my-change"
+    echo "   (Emergency override: git push --no-verify)"
+    exit 1
+  fi
+done
+exit 0

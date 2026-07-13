@@ -65,6 +65,9 @@ private struct MenuBarPanel: View {
     @State private var memory = SystemStatsService.memory()
     @State private var temp = SystemStatsService.temperature()
     @State private var cpu = SystemStatsService.cpuLoad()
+    @State private var battery = SystemGlanceService.battery()
+    @State private var net = SystemGlanceService.networkThroughput()
+    @State private var uptime = SystemGlanceService.uptimeString()
     private let ticker = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
     private var usedFraction: Double {
@@ -168,6 +171,24 @@ private struct MenuBarPanel: View {
                            value: temp.available ? "\(Int(temp.peakCelsius.rounded()))°C" : SystemStatsService.thermal().rawValue,
                            fraction: temp.available ? min(temp.peakCelsius / 100, 1) : nil)
             }
+            .padding(.bottom, 8)
+
+            // Second glance row — battery (if present), live network, uptime.
+            HStack(spacing: 8) {
+                systemStat(icon: battery.charging ? "battery.100.bolt" : "battery.75",
+                           color: Color(red: 0.30, green: 0.82, blue: 0.58),
+                           title: "Battery",
+                           value: battery.hasBattery ? "\(battery.percent)%" : "AC",
+                           fraction: battery.hasBattery ? battery.fraction : nil)
+                systemStat(icon: "arrow.down.arrow.up", color: Color(red: 0.34, green: 0.62, blue: 1),
+                           title: "Network",
+                           value: "↓\(rate(net.downBytesPerSec))",
+                           fraction: nil)
+                systemStat(icon: "clock.arrow.circlepath", color: Color(red: 0.68, green: 0.48, blue: 1),
+                           title: "Uptime",
+                           value: uptime,
+                           fraction: nil)
+            }
             .padding(.bottom, 12)
 
             Divider().padding(.bottom, 10)
@@ -185,7 +206,15 @@ private struct MenuBarPanel: View {
             memory = SystemStatsService.memory()
             temp = SystemStatsService.temperature()
             cpu = SystemStatsService.cpuLoad()
+            battery = SystemGlanceService.battery()
+            net = SystemGlanceService.networkThroughput()
+            uptime = SystemGlanceService.uptimeString()
         }
+    }
+
+    /// Compact byte-rate for the network tile, e.g. "1.2 MB/s", "48 KB/s", "0 B/s".
+    private func rate(_ bytesPerSec: Double) -> String {
+        Int64(max(0, bytesPerSec)).formattedBytes + "/s"
     }
 
     private var thermalColor: Color {

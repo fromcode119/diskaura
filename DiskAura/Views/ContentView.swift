@@ -9,6 +9,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
 }
 
 enum SidebarTab: String, CaseIterable, Identifiable {
+    case smartScan = "Smart Scan"
     case scan = "Disk Scan"
     case largeOldFiles = "Large & Old Files"
     case systemData = "System Data"
@@ -17,8 +18,11 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case assistant = "Assistant"
     case duplicates = "Duplicates"
     case uninstaller = "App Uninstaller"
+    case privacy = "Privacy"
     case processes = "Processes"
     case loginItems = "Login Items"
+    case maintenance = "Maintenance"
+    case shredder = "Secure Shredder"
     case settings = "Settings"
 
     var id: String { rawValue }
@@ -26,6 +30,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     /// Short label for the sidebar (the full rawValue is used for the content header).
     var menuLabel: String {
         switch self {
+        case .smartScan: return "Smart Scan"
         case .scan: return "Disk scan"
         case .largeOldFiles: return "Large & old"
         case .systemData: return "System data"
@@ -34,22 +39,26 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .assistant: return "Assistant"
         case .duplicates: return "Duplicates"
         case .uninstaller: return "Uninstaller"
+        case .privacy: return "Privacy"
         case .processes: return "Processes"
         case .loginItems: return "Login items"
+        case .maintenance: return "Maintenance"
+        case .shredder: return "Shredder"
         case .settings: return "Settings"
         }
     }
 
     var section: SidebarSection {
         switch self {
-        case .scan, .largeOldFiles: return .scanner
-        case .systemData, .cleanup, .smartRules, .assistant, .duplicates, .uninstaller: return .cleanup
-        case .processes, .loginItems, .settings: return .system
+        case .smartScan, .scan, .largeOldFiles: return .scanner
+        case .systemData, .cleanup, .smartRules, .assistant, .duplicates, .uninstaller, .privacy: return .cleanup
+        case .processes, .loginItems, .maintenance, .shredder, .settings: return .system
         }
     }
 
     var icon: String {
         switch self {
+        case .smartScan: return "bolt.fill"
         case .scan: return "chart.pie.fill"
         case .largeOldFiles: return "doc.text.magnifyingglass"
         case .systemData: return "internaldrive.fill"
@@ -58,8 +67,11 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .assistant: return "sparkle"
         case .duplicates: return "doc.on.doc.fill"
         case .uninstaller: return "trash.square.fill"
+        case .privacy: return "hand.raised.fill"
         case .processes: return "cpu.fill"
         case .loginItems: return "power.circle.fill"
+        case .maintenance: return "wrench.and.screwdriver.fill"
+        case .shredder: return "flame.fill"
         case .settings: return "gearshape.fill"
         }
     }
@@ -82,6 +94,8 @@ struct ContentView: View {
 
             Group {
                 switch selectedTab {
+                case .smartScan:
+                    SmartScanView(router: router)
                 case .scan:
                     ScanView(scanVM: scanVM, actionQueueVM: actionQueueVM)
                 case .largeOldFiles:
@@ -98,12 +112,18 @@ struct ContentView: View {
                     DuplicateFinderView(actionQueueVM: actionQueueVM, sharedRootURL: scanVM.result?.root.url)
                 case .uninstaller:
                     UninstallerView(actionQueueVM: actionQueueVM)
+                case .privacy:
+                    PrivacyView()
                 case .processes:
                     ProcessTableView(viewModel: processVM)
                         .onAppear { processVM.start() }
                         .onDisappear { processVM.stop() }
                 case .loginItems:
                     LoginItemsView()
+                case .maintenance:
+                    MaintenanceView()
+                case .shredder:
+                    ShredderView()
                 case .settings:
                     SettingsView(classification: scanVM.classification, actionQueueVM: actionQueueVM, scheduledScan: scheduledScan, exclusions: scanVM.exclusions)
                 }
