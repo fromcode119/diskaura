@@ -274,7 +274,14 @@ struct ContentView: View {
             .background(
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 9)
-                        .fill(isSelected ? color.opacity(0.16) : .clear)
+                        .fill(isSelected
+                              ? LinearGradient(colors: [color.opacity(0.30), color.opacity(0.12)],
+                                               startPoint: .leading, endPoint: .trailing)
+                              : LinearGradient(colors: [.clear, .clear], startPoint: .leading, endPoint: .trailing))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9)
+                                .stroke(color.opacity(isSelected ? 0.35 : 0), lineWidth: 1)
+                        )
                     if isSelected {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(color)
