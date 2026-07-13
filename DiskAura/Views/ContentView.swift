@@ -92,7 +92,9 @@ struct ContentView: View {
     @ObservedObject private var undoStore = UndoHistoryStore.shared
 
     var body: some View {
-        HStack(spacing: 0) {
+        ZStack {
+            AuraBackground()
+            HStack(spacing: 0) {
             sidebar
 
             Group {
@@ -134,7 +136,9 @@ struct ContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Theme.appGradient)
+            // Transparent so the app-wide aura canvas (behind everything) shows through; cards
+            // provide their own contrast on top.
+            .background(Color.clear)
             // The delete queue lives here, at the app level — not inside ScanView — so
             // anything you queue from Duplicates / Large & Old / the breakdown can always be
             // reviewed and actually deleted, from whatever tab you're on. Previously the bar
@@ -154,6 +158,7 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showRecovery) { RecoveryView() }
+            }
         }
         .onAppear { scheduledScan.attach(to: scanVM) }
     }
@@ -231,7 +236,8 @@ struct ContentView: View {
             .padding(.bottom, 14)
         }
         .frame(width: 208)
-        .background(Theme.sidebarGradient)
+        .background(.ultraThinMaterial)
+        .overlay(Rectangle().frame(width: 1).foregroundStyle(.white.opacity(0.06)), alignment: .trailing)
     }
 
     private func sidebarRow(_ tab: SidebarTab) -> some View {
