@@ -136,6 +136,9 @@ struct ContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Small top inset so content headers clear the title-bar drag region and line up
+            // roughly with the sidebar brand.
+            .padding(.top, 10)
             // Transparent so the app-wide aura canvas (behind everything) shows through; cards
             // provide their own contrast on top.
             .background(Color.clear)
@@ -159,6 +162,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showRecovery) { RecoveryView() }
             }
+            // Let the content run up under the (hidden) title bar so headers sit near the top
+            // edge instead of below a ~28px reserved band, which read as a big empty gap.
+            .ignoresSafeArea(.container, edges: .top)
         }
         .onAppear { scheduledScan.attach(to: scanVM) }
     }
@@ -178,7 +184,7 @@ struct ContentView: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 15)
-            .padding(.top, 40)   // clear the floating traffic-light buttons (hidden title bar)
+            .padding(.top, 26)   // sit just below the floating traffic-light buttons (hidden title bar)
             .padding(.bottom, 14)
 
             // Scrollable nav — the module list can be taller than the window, so it scrolls
