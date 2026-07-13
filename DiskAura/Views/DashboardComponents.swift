@@ -87,3 +87,37 @@ struct DashboardCard<Content: View>: View {
             .glassCard()
     }
 }
+
+/// A compact circular stat — a thin ring gauge with a centered icon and a value/label beneath.
+/// Keeps the "everything is a circle" language consistent across dashboards.
+struct MiniRingStat: View {
+    let fraction: Double
+    let value: String
+    let label: String
+    let color: Color
+    let icon: String
+
+    var body: some View {
+        VStack(spacing: 9) {
+            ZStack {
+                Circle().stroke(Color.white.opacity(0.08), lineWidth: 7).frame(width: 62, height: 62)
+                Circle()
+                    .trim(from: 0, to: max(0.001, min(fraction, 1)))
+                    .stroke(AngularGradient(gradient: Gradient(colors: [color.opacity(0.65), color]),
+                                            center: .center, startAngle: .degrees(-90), endAngle: .degrees(270)),
+                            style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 62, height: 62)
+                Image(systemName: icon).font(.system(size: 17, weight: .medium)).foregroundColor(color)
+            }
+            VStack(spacing: 1) {
+                Text(value).font(.system(size: 14, weight: .bold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.7)
+                Text(label).font(.system(size: 10)).foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Color.white.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius).stroke(Color.white.opacity(0.06), lineWidth: 1))
+    }
+}

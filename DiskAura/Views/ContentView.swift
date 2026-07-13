@@ -163,33 +163,43 @@ struct ContentView: View {
     /// made the app feel like a stripped-down utility.
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Brand header — fixed at the top.
             HStack(spacing: 9) {
                 Image("AppLogo")
                     .resizable()
                     .interpolation(.high)
-                    .frame(width: 26, height: 26)
-                Text("DiskAura").font(.system(size: 15, weight: .semibold))
+                    .frame(width: 28, height: 28)
+                Text("DiskAura").font(.system(size: 16, weight: .semibold))
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 15)
             .padding(.top, 16)
-            .padding(.bottom, 18)
+            .padding(.bottom, 14)
 
-            ForEach(SidebarSection.allCases) { section in
-                Text(section.rawValue.uppercased())
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                    .tracking(0.7)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 5)
+            // Scrollable nav — the module list can be taller than the window, so it scrolls
+            // between the fixed header and footer instead of being clipped.
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 1) {
+                    ForEach(SidebarSection.allCases) { section in
+                        Text(section.rawValue.uppercased())
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                            .tracking(0.8)
+                            .padding(.horizontal, 16)
+                            .padding(.top, section == SidebarSection.allCases.first ? 2 : 14)
+                            .padding(.bottom, 6)
 
-                ForEach(SidebarTab.allCases.filter { $0.section == section }) { tab in
-                    sidebarRow(tab)
+                        ForEach(SidebarTab.allCases.filter { $0.section == section }) { tab in
+                            sidebarRow(tab)
+                        }
+                    }
                 }
+                .padding(.bottom, 10)
             }
 
-            Spacer()
+            Divider().opacity(0.5)
 
+            // Footer — Recovery + scan status, always visible.
             Button { showRecovery = true } label: {
                 HStack(spacing: 7) {
                     Image(systemName: "arrow.uturn.backward").font(.system(size: 11, weight: .semibold))
@@ -207,6 +217,7 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 8)
+            .padding(.top, 8)
 
             HStack(spacing: 6) {
                 Circle().fill(scanVM.result != nil ? Theme.moduleColor(.processes) : Color.secondary)
@@ -216,9 +227,10 @@ struct ContentView: View {
                     .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 16)
+            .padding(.top, 4)
             .padding(.bottom, 14)
         }
-        .frame(width: 194)
+        .frame(width: 208)
         .background(Theme.sidebarGradient)
     }
 
