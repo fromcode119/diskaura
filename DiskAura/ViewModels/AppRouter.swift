@@ -5,5 +5,5 @@ import SwiftUI
 /// tab is showing — e.g. the menu bar's "Review in Cleanup" jumps straight to that module.
 @MainActor
 final class AppRouter: ObservableObject {
-    @Published var selectedTab: SidebarTab = .scan
+    @Published var selectedTab: SidebarTab = .smartScan
 }

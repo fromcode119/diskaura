@@ -44,6 +44,7 @@ enum Theme {
     /// reads as colorful and modular rather than one monochrome icon rail.
     static func moduleColor(_ tab: SidebarTab) -> Color {
         switch tab {
+        case .smartScan: return Color(red: 0.62, green: 0.55, blue: 1.00)
         case .scan: return Color(red: 0.34, green: 0.62, blue: 1.00)
         case .largeOldFiles: return Color(red: 1.00, green: 0.62, blue: 0.20)
         case .systemData: return Color(red: 0.45, green: 0.72, blue: 0.95)
@@ -52,8 +53,11 @@ enum Theme {
         case .assistant: return Color(red: 0.42, green: 0.78, blue: 0.92)
         case .duplicates: return Color(red: 0.68, green: 0.48, blue: 1.00)
         case .uninstaller: return Color(red: 1.00, green: 0.38, blue: 0.44)
+        case .privacy: return Color(red: 0.40, green: 0.70, blue: 0.98)
         case .processes: return Color(red: 0.30, green: 0.82, blue: 0.58)
         case .loginItems: return Color(red: 0.98, green: 0.72, blue: 0.25)
+        case .maintenance: return Color(red: 0.36, green: 0.80, blue: 0.72)
+        case .shredder: return Color(red: 1.00, green: 0.50, blue: 0.30)
         case .settings: return Color(red: 0.58, green: 0.60, blue: 0.66)
         }
     }
