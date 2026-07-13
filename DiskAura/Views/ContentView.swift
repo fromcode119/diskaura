@@ -19,6 +19,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case duplicates = "Duplicates"
     case uninstaller = "App Uninstaller"
     case privacy = "Privacy"
+    case protection = "Protection"
     case processes = "Processes"
     case loginItems = "Login Items"
     case maintenance = "Maintenance"
@@ -40,6 +41,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .duplicates: return "Duplicates"
         case .uninstaller: return "Uninstaller"
         case .privacy: return "Privacy"
+        case .protection: return "Protection"
         case .processes: return "Processes"
         case .loginItems: return "Login items"
         case .maintenance: return "Maintenance"
@@ -51,7 +53,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     var section: SidebarSection {
         switch self {
         case .smartScan, .scan, .largeOldFiles: return .scanner
-        case .systemData, .cleanup, .smartRules, .assistant, .duplicates, .uninstaller, .privacy: return .cleanup
+        case .systemData, .cleanup, .smartRules, .assistant, .duplicates, .uninstaller, .privacy, .protection: return .cleanup
         case .processes, .loginItems, .maintenance, .shredder, .settings: return .system
         }
     }
@@ -68,6 +70,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .duplicates: return "doc.on.doc.fill"
         case .uninstaller: return "trash.square.fill"
         case .privacy: return "hand.raised.fill"
+        case .protection: return "shield.lefthalf.filled"
         case .processes: return "cpu.fill"
         case .loginItems: return "power.circle.fill"
         case .maintenance: return "wrench.and.screwdriver.fill"
@@ -114,6 +117,8 @@ struct ContentView: View {
                     UninstallerView(actionQueueVM: actionQueueVM)
                 case .privacy:
                     PrivacyView()
+                case .protection:
+                    ProtectionView()
                 case .processes:
                     ProcessTableView(viewModel: processVM)
                         .onAppear { processVM.start() }

@@ -54,6 +54,7 @@ enum Theme {
         case .duplicates: return Color(red: 0.68, green: 0.48, blue: 1.00)
         case .uninstaller: return Color(red: 1.00, green: 0.38, blue: 0.44)
         case .privacy: return Color(red: 0.40, green: 0.70, blue: 0.98)
+        case .protection: return Color(red: 0.36, green: 0.78, blue: 0.62)
         case .processes: return Color(red: 0.30, green: 0.82, blue: 0.58)
         case .loginItems: return Color(red: 0.98, green: 0.72, blue: 0.25)
         case .maintenance: return Color(red: 0.36, green: 0.80, blue: 0.72)
