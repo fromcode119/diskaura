@@ -1,0 +1,47 @@
+# ---- macOS ----
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# ---- Xcode ----
+# The .xcodeproj is generated from project.yml by XcodeGen — don't commit it.
+*.xcodeproj/
+!project.yml
+
+## Build products & derived data
+build/
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+## User-specific Xcode state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+
+## Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.resolved
+
+# ---- Release artifacts ----
+dist/
+*.dmg
+
+# ---- Editor / tooling ----
+.idea/
+*.swp
+*~
+
+# ---- Scratch ----
+/tmp/
+
+# ---- Internal strategy docs (keep local, not for the public/company repo) ----
+PRODUCT-ROADMAP.md
+ROADMAP.md
