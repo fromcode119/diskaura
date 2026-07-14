@@ -11,6 +11,7 @@ struct RulesView: View {
     @State private var isApplying = false
     @State private var rule: FileRule?
     @State private var matches: [FileRuleEngine.Match] = []
+    @State private var diagnosis: FileRuleEngine.Diagnosis?
     @State private var summary: String = ""
     @State private var message: String?
 
@@ -108,7 +109,7 @@ struct RulesView: View {
             }
             Divider()
             if matches.isEmpty {
-                Text("Checked \(folder.lastPathComponent) — nothing matches this rule right now (e.g. no files that old/large/of that type). Try a different rule or folder.")
+                Text(emptyExplanation)
                     .font(.system(size: 11)).foregroundColor(.secondary)
             } else {
                 Text("\(matches.count) matching file\(matches.count == 1 ? "" : "s")")
@@ -165,6 +166,27 @@ struct RulesView: View {
         // Always honour the rule's filter — "organize PDFs older than 30 days" must sort ONLY those
         // PDFs, not the whole folder. With no filter ("organize my files") this matches everything.
         matches = FileRuleEngine.matches(for: rule, in: folder)
+        diagnosis = FileRuleEngine.diagnose(for: rule, in: folder)
+    }
+
+    /// A precise explanation of an empty result so a 0-match rule doesn't read as "broken".
+    private var emptyExplanation: String {
+        let name = folder.lastPathComponent
+        guard let rule, let d = diagnosis else { return "Nothing in \(name) matches this rule." }
+        let typeLabel = rule.extensions.isEmpty ? "files" : rule.extensions.map { ".\($0)" }.joined(separator: "/") + " files"
+        var constraints: [String] = []
+        if rule.olderThanDays > 0 { constraints.append("older than \(rule.olderThanDays) days") }
+        if rule.largerThanMB > 0 { constraints.append("larger than \(rule.largerThanMB) MB") }
+        if !rule.nameContains.isEmpty { constraints.append("named like “\(rule.nameContains)”") }
+        let constraint = constraints.isEmpty ? "" : " " + constraints.joined(separator: " and ")
+
+        if d.typeMatches == 0 {
+            return rule.extensions.isEmpty
+                ? "\(name) has no loose files to match."
+                : "No \(typeLabel) in \(name)\(d.total > 0 ? " (it has \(d.total) other file\(d.total == 1 ? "" : "s"))" : "")."
+        }
+        // There ARE files of that type, but the filter excluded them all.
+        return "Found \(d.typeMatches) \(typeLabel) in \(name), but none are\(constraint). Try loosening the rule."
     }
 
     private func apply() {
