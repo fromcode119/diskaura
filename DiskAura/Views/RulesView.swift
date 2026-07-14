@@ -36,7 +36,6 @@ struct RulesView: View {
             }
             .padding(Theme.Spacing.lg)
         }
-        .background(Theme.appGradient)
     }
 
     private var header: some View {

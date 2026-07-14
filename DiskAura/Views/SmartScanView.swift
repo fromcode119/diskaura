@@ -4,7 +4,7 @@ import SwiftUI
 /// one-tap scan that aggregates system junk + browser caches + Trash into routed findings.
 struct SmartScanView: View {
     @ObservedObject var router: AppRouter
-    @StateObject private var viewModel = SmartScanViewModel()
+    @ObservedObject var viewModel: SmartScanViewModel
 
     private var accent: Color { Theme.moduleColor(.smartScan) }
 

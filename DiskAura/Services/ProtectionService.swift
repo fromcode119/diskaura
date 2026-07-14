@@ -46,14 +46,37 @@ enum ProtectionService {
     }
 
     /// Moves each threat's launch-item file to the Trash (so it won't load again at login) —
-    /// recoverable. Returns how many were quarantined.
+    /// recoverable. Items in /Library/LaunchAgents|LaunchDaemons are root-owned, so `trashItem`
+    /// fails for them; those are moved to the user's Trash with one admin prompt (session-cached).
+    /// Returns how many were quarantined.
     static func quarantine(_ threats: [Threat]) -> Int {
         var removed = 0
+        var needAdmin: [URL] = []
         for threat in threats {
             do { try FileManager.default.trashItem(at: threat.path, resultingItemURL: nil); removed += 1 }
-            catch { continue }
+            catch { needAdmin.append(threat.path) }
+        }
+        if !needAdmin.isEmpty {
+            removed += escalatedTrash(needAdmin)
         }
         return removed
+    }
+
+    /// Moves root-owned files to the user's Trash via an admin-escalated `mv` (recoverable).
+    private static func escalatedTrash(_ urls: [URL]) -> Int {
+        let trash = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Trash", isDirectory: true)
+        let commands = urls.map { url -> String in
+            let dest = trash.appendingPathComponent(url.lastPathComponent)
+            return "/bin/mv -f \(shellQuote(url.path)) \(shellQuote(dest.path))"
+        }
+        let result = PrivilegedRunner.run(commands.joined(separator: " ; "))
+        guard result.ok else { return 0 }
+        // Success = the source files no longer exist.
+        return urls.filter { !FileManager.default.fileExists(atPath: $0.path) }.count
+    }
+
+    private static func shellQuote(_ path: String) -> String {
+        "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     // MARK: - Evaluation

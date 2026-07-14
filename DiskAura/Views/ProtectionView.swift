@@ -4,7 +4,7 @@ import SwiftUI
 /// suspicious (script-dropper / orphaned) launch items. Detections quarantine to the Trash. Not a
 /// full antivirus; it's the "is anything obviously nasty auto-starting?" check the Mac cleaners have.
 struct ProtectionView: View {
-    @StateObject private var viewModel = ProtectionViewModel()
+    @ObservedObject var viewModel: ProtectionViewModel
 
     private var accent: Color { Theme.moduleColor(.protection) }
 

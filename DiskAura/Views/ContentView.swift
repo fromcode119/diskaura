@@ -87,6 +87,11 @@ struct ContentView: View {
     @StateObject private var processVM = ProcessViewModel()
     @StateObject private var actionQueueVM = ActionQueueViewModel()
     @StateObject private var scheduledScan = ScheduledScanService()
+    // Hoisted here (not owned by their tab views) so their scan results persist when you switch
+    // tabs and come back, instead of being thrown away and re-scanned.
+    @StateObject private var smartScanVM = SmartScanViewModel()
+    @StateObject private var privacyVM = PrivacyViewModel()
+    @StateObject private var protectionVM = ProtectionViewModel()
     @State private var showActionQueue = false
     @State private var showRecovery = false
     @ObservedObject private var undoStore = UndoHistoryStore.shared
@@ -100,7 +105,7 @@ struct ContentView: View {
             Group {
                 switch selectedTab {
                 case .smartScan:
-                    SmartScanView(router: router)
+                    SmartScanView(router: router, viewModel: smartScanVM)
                 case .scan:
                     ScanView(scanVM: scanVM, actionQueueVM: actionQueueVM)
                 case .largeOldFiles:
@@ -118,9 +123,9 @@ struct ContentView: View {
                 case .uninstaller:
                     UninstallerView(actionQueueVM: actionQueueVM)
                 case .privacy:
-                    PrivacyView()
+                    PrivacyView(viewModel: privacyVM)
                 case .protection:
-                    ProtectionView()
+                    ProtectionView(viewModel: protectionVM)
                 case .processes:
                     ProcessTableView(viewModel: processVM)
                         .onAppear { processVM.start() }

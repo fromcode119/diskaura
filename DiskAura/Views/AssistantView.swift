@@ -46,7 +46,6 @@ struct AssistantView: View {
                 inputBar
             }
         }
-        .background(Theme.appGradient)
         .onAppear { if facts == nil { prepare() } }
     }
 
@@ -107,7 +106,7 @@ struct AssistantView: View {
     private func bubble(_ message: Message) -> some View {
         HStack {
             if message.fromUser { Spacer(minLength: 40) }
-            Text(message.text)
+            Text(.init(message.text))   // render **bold** section names as markdown
                 .font(.system(size: 12.5))
                 .padding(.horizontal, 12).padding(.vertical, 9)
                 .background(message.fromUser ? Theme.moduleColor(.smartRules).opacity(0.9) : Theme.panelBackground)
@@ -160,13 +159,19 @@ struct AssistantView: View {
 
     private func send(_ text: String) {
         let question = text.trimmingCharacters(in: .whitespaces)
-        guard !question.isEmpty, !isThinking, let box = serviceBox else { return }
+        guard !question.isEmpty, !isThinking else { return }
         input = ""
         messages.append(Message(fromUser: true, text: question))
         isThinking = true
         Task {
+            // The service is built after the disk facts finish loading; if the user asks before
+            // that (e.g. taps a suggestion while it still says "Reading your disk…"), wait for it
+            // instead of silently dropping the question.
+            while serviceBox?.instance == nil && isPreparing {
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
             let reply: String
-            if #available(macOS 26.0, *), let service = box.instance as? AssistantService {
+            if #available(macOS 26.0, *), let service = serviceBox?.instance as? AssistantService {
                 reply = await service.answer(question)
             } else {
                 reply = "The assistant isn't available on this Mac."

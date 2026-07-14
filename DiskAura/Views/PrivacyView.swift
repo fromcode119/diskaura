@@ -4,7 +4,7 @@ import SwiftUI
 /// Everything goes to the Trash (recoverable). Sensitive items (cookies/history) are guarded
 /// when the browser is open, since clearing a live profile database can corrupt it.
 struct PrivacyView: View {
-    @StateObject private var viewModel = PrivacyViewModel()
+    @ObservedObject var viewModel: PrivacyViewModel
 
     private var accent: Color { Theme.moduleColor(.privacy) }
 
