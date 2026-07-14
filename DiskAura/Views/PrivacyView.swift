@@ -4,7 +4,7 @@ import SwiftUI
 /// Everything goes to the Trash (recoverable). Sensitive items (cookies/history) are guarded
 /// when the browser is open, since clearing a live profile database can corrupt it.
 struct PrivacyView: View {
-    @StateObject private var viewModel = PrivacyViewModel()
+    @ObservedObject var viewModel: PrivacyViewModel
 
     private var accent: Color { Theme.moduleColor(.privacy) }
 
@@ -53,6 +53,17 @@ struct PrivacyView: View {
                 VStack(spacing: Theme.Spacing.md) {
                     if let done = viewModel.lastCleaned, done.count > 0 {
                         banner("Cleared \(done.bytes.formattedBytes) to the Trash")
+                    }
+                    if let hint = viewModel.permissionHint {
+                        HStack(spacing: 8) {
+                            Image(systemName: "lock.shield").foregroundColor(Theme.moduleColor(.largeOldFiles))
+                            Text(hint).font(.system(size: 11)).foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer()
+                        }
+                        .padding(12)
+                        .background(Theme.moduleColor(.largeOldFiles).opacity(0.10))
+                        .clipShape(RoundedRectangle(cornerRadius: 9))
                     }
                     ForEach(PrivacyBrowser.allCases, id: \.self) { browser in
                         let group = viewModel.items.filter { $0.browser == browser }

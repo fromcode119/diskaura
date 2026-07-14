@@ -8,7 +8,7 @@ struct DiskAuraApp: App {
     var body: some Scene {
         WindowGroup(id: "main") {
             ContentView(router: router)
-                .frame(minWidth: 960, minHeight: 640)
+                .frame(minWidth: 1000, minHeight: 700)
                 .tint(Theme.accent)
                 // The whole product is designed as a premium dark app (the sunburst, the
                 // dark cards) — pinning the scheme keeps it consistent instead of flipping
@@ -16,6 +16,7 @@ struct DiskAuraApp: App {
                 .preferredColorScheme(.dark)
                 .onAppear { menuBarMonitor.start(); AppRemovalWatcher.shared.start() }
         }
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .commands {
             // Discoverable View menu with Cmd+1…N to jump between modules — the canonical

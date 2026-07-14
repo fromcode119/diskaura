@@ -6,6 +6,9 @@ import AppKit
 /// cleans the selected ones through the global action queue (to Trash, recoverable).
 struct CleanupView: View {
     @StateObject private var viewModel = CleanupViewModel()
+    // Observe the shared junk store directly so the view re-renders when Smart Scan (or a clean)
+    // updates the cached result — the view model reads its data from the same store.
+    @ObservedObject private var junkStore = JunkScanStore.shared
     @ObservedObject var actionQueueVM: ActionQueueViewModel
     @State private var expanded: Set<String> = []
 
@@ -53,6 +56,10 @@ struct CleanupView: View {
                 cleanBar
             }
         }
+        // Reuse a scan already run in Smart Scan (or a previous visit) instead of forcing a new
+        // one; only pick default selections here.
+        .onAppear { viewModel.applyDefaultSelection() }
+        .onChange(of: junkStore.categories.count) { _, _ in viewModel.applyDefaultSelection() }
     }
 
     private static let donutPalette: [Color] = [

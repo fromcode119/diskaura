@@ -47,6 +47,27 @@ enum FileRuleEngine {
         return parts.joined(separator: ", ") + " \(target)"
     }
 
+    /// Why a rule matched nothing: how many loose files are of the requested TYPE (ignoring the
+    /// age/size/name filters), and how many loose files there are in total. Lets the UI say
+    /// "found 21 PDFs, but none are older than 30 days" instead of a vague "no matches".
+    struct Diagnosis { let typeMatches: Int; let total: Int }
+
+    static func diagnose(for rule: FileRule, in folder: URL) -> Diagnosis {
+        let fm = FileManager.default
+        guard let entries = try? fm.contentsOfDirectory(
+            at: folder, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]
+        ) else { return Diagnosis(typeMatches: 0, total: 0) }
+        let wantedExt = Set(rule.extensions.map { $0.lowercased() })
+        var typeMatches = 0
+        var total = 0
+        for url in entries {
+            if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true { continue }
+            total += 1
+            if wantedExt.isEmpty || wantedExt.contains(url.pathExtension.lowercased()) { typeMatches += 1 }
+        }
+        return Diagnosis(typeMatches: typeMatches, total: total)
+    }
+
     static func matches(for rule: FileRule, in folder: URL) -> [Match] {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(

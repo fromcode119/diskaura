@@ -19,6 +19,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case duplicates = "Duplicates"
     case uninstaller = "App Uninstaller"
     case privacy = "Privacy"
+    case protection = "Protection"
     case processes = "Processes"
     case loginItems = "Login Items"
     case maintenance = "Maintenance"
@@ -40,6 +41,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .duplicates: return "Duplicates"
         case .uninstaller: return "Uninstaller"
         case .privacy: return "Privacy"
+        case .protection: return "Protection"
         case .processes: return "Processes"
         case .loginItems: return "Login items"
         case .maintenance: return "Maintenance"
@@ -51,7 +53,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     var section: SidebarSection {
         switch self {
         case .smartScan, .scan, .largeOldFiles: return .scanner
-        case .systemData, .cleanup, .smartRules, .assistant, .duplicates, .uninstaller, .privacy: return .cleanup
+        case .systemData, .cleanup, .smartRules, .assistant, .duplicates, .uninstaller, .privacy, .protection: return .cleanup
         case .processes, .loginItems, .maintenance, .shredder, .settings: return .system
         }
     }
@@ -68,6 +70,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .duplicates: return "doc.on.doc.fill"
         case .uninstaller: return "trash.square.fill"
         case .privacy: return "hand.raised.fill"
+        case .protection: return "shield.lefthalf.filled"
         case .processes: return "cpu.fill"
         case .loginItems: return "power.circle.fill"
         case .maintenance: return "wrench.and.screwdriver.fill"
@@ -84,52 +87,64 @@ struct ContentView: View {
     @StateObject private var processVM = ProcessViewModel()
     @StateObject private var actionQueueVM = ActionQueueViewModel()
     @StateObject private var scheduledScan = ScheduledScanService()
+    // Hoisted here (not owned by their tab views) so their scan results persist when you switch
+    // tabs and come back, instead of being thrown away and re-scanned.
+    @StateObject private var smartScanVM = SmartScanViewModel()
+    @StateObject private var privacyVM = PrivacyViewModel()
+    @StateObject private var protectionVM = ProtectionViewModel()
     @State private var showActionQueue = false
     @State private var showRecovery = false
+    @State private var visited: Set<SidebarTab> = []
     @ObservedObject private var undoStore = UndoHistoryStore.shared
 
+    @ViewBuilder
+    private func tabContent(_ tab: SidebarTab) -> some View {
+        switch tab {
+        case .smartScan: SmartScanView(router: router, viewModel: smartScanVM)
+        case .scan: ScanView(scanVM: scanVM, actionQueueVM: actionQueueVM)
+        case .largeOldFiles: LargeOldFilesView(root: scanVM.result?.root, actionQueueVM: actionQueueVM)
+        case .systemData: SystemDataView(router: router)
+        case .cleanup: CleanupView(actionQueueVM: actionQueueVM)
+        case .smartRules: RulesView()
+        case .assistant: AssistantView(scanVM: scanVM, router: router)
+        case .duplicates: DuplicateFinderView(actionQueueVM: actionQueueVM, sharedRootURL: scanVM.result?.root.url)
+        case .uninstaller: UninstallerView(actionQueueVM: actionQueueVM)
+        case .privacy: PrivacyView(viewModel: privacyVM)
+        case .protection: ProtectionView(viewModel: protectionVM)
+        case .processes: ProcessTableView(viewModel: processVM)
+        case .loginItems: LoginItemsView()
+        case .maintenance: MaintenanceView()
+        case .shredder: ShredderView()
+        case .settings: SettingsView(classification: scanVM.classification, actionQueueVM: actionQueueVM, scheduledScan: scheduledScan, exclusions: scanVM.exclusions)
+        }
+    }
+
     var body: some View {
-        HStack(spacing: 0) {
+        ZStack {
+            AuraBackground()
+            HStack(spacing: 0) {
             sidebar
 
-            Group {
-                switch selectedTab {
-                case .smartScan:
-                    SmartScanView(router: router)
-                case .scan:
-                    ScanView(scanVM: scanVM, actionQueueVM: actionQueueVM)
-                case .largeOldFiles:
-                    LargeOldFilesView(root: scanVM.result?.root, actionQueueVM: actionQueueVM)
-                case .systemData:
-                    SystemDataView(router: router)
-                case .cleanup:
-                    CleanupView(actionQueueVM: actionQueueVM)
-                case .smartRules:
-                    RulesView()
-                case .assistant:
-                    AssistantView(scanVM: scanVM)
-                case .duplicates:
-                    DuplicateFinderView(actionQueueVM: actionQueueVM, sharedRootURL: scanVM.result?.root.url)
-                case .uninstaller:
-                    UninstallerView(actionQueueVM: actionQueueVM)
-                case .privacy:
-                    PrivacyView()
-                case .processes:
-                    ProcessTableView(viewModel: processVM)
-                        .onAppear { processVM.start() }
-                        .onDisappear { processVM.stop() }
-                case .loginItems:
-                    LoginItemsView()
-                case .maintenance:
-                    MaintenanceView()
-                case .shredder:
-                    ShredderView()
-                case .settings:
-                    SettingsView(classification: scanVM.classification, actionQueueVM: actionQueueVM, scheduledScan: scheduledScan, exclusions: scanVM.exclusions)
+            // Keep every visited tab ALIVE (created on first visit, then hidden rather than
+            // destroyed) so switching tabs never throws away a scan/conversation/selection. The
+            // active tab is shown; the rest sit at opacity 0 with hit-testing off.
+            ZStack {
+                ForEach(SidebarTab.allCases) { tab in
+                    if visited.contains(tab) {
+                        tabContent(tab)
+                            .opacity(tab == selectedTab ? 1 : 0)
+                            .allowsHitTesting(tab == selectedTab)
+                            .zIndex(tab == selectedTab ? 1 : 0)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Theme.appGradient)
+            // Small top inset so content headers clear the title-bar drag region and line up
+            // roughly with the sidebar brand.
+            .padding(.top, 10)
+            // Transparent so the app-wide aura canvas (behind everything) shows through; cards
+            // provide their own contrast on top.
+            .background(Color.clear)
             // The delete queue lives here, at the app level — not inside ScanView — so
             // anything you queue from Duplicates / Large & Old / the breakdown can always be
             // reviewed and actually deleted, from whatever tab you're on. Previously the bar
@@ -149,8 +164,22 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showRecovery) { RecoveryView() }
+            }
+            // Let the content run up under the (hidden) title bar so headers sit near the top
+            // edge instead of below a ~28px reserved band, which read as a big empty gap.
+            .ignoresSafeArea(.container, edges: .top)
         }
-        .onAppear { scheduledScan.attach(to: scanVM) }
+        .onAppear {
+            scheduledScan.attach(to: scanVM)
+            visited.insert(selectedTab)
+            if selectedTab == .processes { processVM.start() }
+        }
+        // Views are kept alive, so onDisappear no longer fires on tab switch — drive the
+        // Processes sampler (and future per-tab lifecycles) off the selected tab instead.
+        .onChange(of: selectedTab) { _, tab in
+            visited.insert(tab)
+            if tab == .processes { processVM.start() } else { processVM.stop() }
+        }
     }
 
     /// Wide labeled sidebar (CleanMyMac's actual layout) — colored icon + text label per
@@ -158,33 +187,43 @@ struct ContentView: View {
     /// made the app feel like a stripped-down utility.
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Brand header — fixed at the top.
             HStack(spacing: 9) {
                 Image("AppLogo")
                     .resizable()
                     .interpolation(.high)
-                    .frame(width: 26, height: 26)
-                Text("DiskAura").font(.system(size: 15, weight: .semibold))
+                    .frame(width: 28, height: 28)
+                Text("DiskAura").font(.system(size: 16, weight: .semibold))
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 16)
-            .padding(.bottom, 18)
+            .padding(.horizontal, 15)
+            .padding(.top, 26)   // sit just below the floating traffic-light buttons (hidden title bar)
+            .padding(.bottom, 14)
 
-            ForEach(SidebarSection.allCases) { section in
-                Text(section.rawValue.uppercased())
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                    .tracking(0.7)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 5)
+            // Scrollable nav — the module list can be taller than the window, so it scrolls
+            // between the fixed header and footer instead of being clipped.
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 1) {
+                    ForEach(SidebarSection.allCases) { section in
+                        Text(section.rawValue.uppercased())
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                            .tracking(0.8)
+                            .padding(.horizontal, 16)
+                            .padding(.top, section == SidebarSection.allCases.first ? 2 : 14)
+                            .padding(.bottom, 6)
 
-                ForEach(SidebarTab.allCases.filter { $0.section == section }) { tab in
-                    sidebarRow(tab)
+                        ForEach(SidebarTab.allCases.filter { $0.section == section }) { tab in
+                            sidebarRow(tab)
+                        }
+                    }
                 }
+                .padding(.bottom, 10)
             }
 
-            Spacer()
+            Divider().opacity(0.5)
 
+            // Footer — Recovery + scan status, always visible.
             Button { showRecovery = true } label: {
                 HStack(spacing: 7) {
                     Image(systemName: "arrow.uturn.backward").font(.system(size: 11, weight: .semibold))
@@ -202,6 +241,7 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 8)
+            .padding(.top, 8)
 
             HStack(spacing: 6) {
                 Circle().fill(scanVM.result != nil ? Theme.moduleColor(.processes) : Color.secondary)
@@ -211,10 +251,12 @@ struct ContentView: View {
                     .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 16)
+            .padding(.top, 4)
             .padding(.bottom, 14)
         }
-        .frame(width: 194)
-        .background(Theme.sidebarGradient)
+        .frame(width: 208)
+        .background(.ultraThinMaterial)
+        .overlay(Rectangle().frame(width: 1).foregroundStyle(.white.opacity(0.06)), alignment: .trailing)
     }
 
     private func sidebarRow(_ tab: SidebarTab) -> some View {
@@ -251,7 +293,14 @@ struct ContentView: View {
             .background(
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 9)
-                        .fill(isSelected ? color.opacity(0.16) : .clear)
+                        .fill(isSelected
+                              ? LinearGradient(colors: [color.opacity(0.30), color.opacity(0.12)],
+                                               startPoint: .leading, endPoint: .trailing)
+                              : LinearGradient(colors: [.clear, .clear], startPoint: .leading, endPoint: .trailing))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9)
+                                .stroke(color.opacity(isSelected ? 0.35 : 0), lineWidth: 1)
+                        )
                     if isSelected {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(color)

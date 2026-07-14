@@ -31,6 +31,10 @@ files anywhere. Nothing it does is a one-way door: every clean and move is recov
 - **Assistant** — ask "why is my disk full?" and get a grounded, on-device answer based on your real data.
 - **App Uninstaller** — removes apps *and* the leftovers they hide, with admin escalation for
   root-owned apps, plus a background watcher that catches leftovers when you trash an app in Finder.
+- **Protection** — scans for adware and suspicious launch items, and quarantines them to the Trash
+  (root-owned `/Library` items via an admin-escalated move).
+- **Privacy** — clears browser caches, cookies, and history for Safari, Chrome, and Firefox, all to
+  the Trash (recoverable), guarding sensitive data while a browser is running.
 - **Recovery** — a session history of everything moved or cleaned, each with one-click undo.
 - **Scheduled maintenance** — optional set-and-forget auto-clean of safe junk to the Trash.
 - **Menu-bar glance** — live free space, memory, CPU, and temperature.
@@ -65,8 +69,8 @@ xcodegen generate
 xcodebuild -project DiskAura.xcodeproj -scheme DiskAura -configuration Release build
 ```
 
-The build is signed with a local development certificate. On first launch, right-click the app and
-choose **Open** to get past Gatekeeper (a normal step for locally-signed apps).
+The build is ad-hoc signed (no Apple Developer certificate required). On first launch, right-click the
+app and choose **Open** to get past Gatekeeper (a normal step for ad-hoc–signed apps).
 
 ## Contributing
 

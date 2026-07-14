@@ -116,13 +116,11 @@ enum MaintenanceService {
     }
 
     private static func runAdmin(_ commands: [String]) -> MaintenanceOutcome {
-        let script = commands.joined(separator: " && ")
-        let appleScript = "do shell script \"\(escapeForAppleScript(script))\" with administrator privileges"
-        let (ok, out) = shell("/usr/bin/osascript", ["-e", appleScript])
-        if ok { return .success(clean(out)) }
-        // osascript exits non-zero when the user cancels the auth dialog (error -128).
-        return out.contains("-128") || out.localizedCaseInsensitiveContains("cancel")
-            ? .cancelled : .failure(clean(out))
+        // Session-cached authorization: the FIRST admin task prompts for a password; the rest in
+        // this session run without re-prompting. See PrivilegedRunner.
+        let result = PrivilegedRunner.run(commands.joined(separator: " && "))
+        if result.ok { return .success(clean(result.output)) }
+        return result.cancelled ? .cancelled : .failure(clean(result.output))
     }
 
     private static func shell(_ launch: String, _ args: [String]) -> (Bool, String) {
@@ -145,9 +143,5 @@ enum MaintenanceService {
     private static func clean(_ s: String) -> String {
         let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
         return t.isEmpty ? "Done." : String(t.prefix(400))
-    }
-
-    private static func escapeForAppleScript(_ s: String) -> String {
-        s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
     }
 }

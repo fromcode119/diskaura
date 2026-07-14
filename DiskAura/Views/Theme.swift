@@ -54,6 +54,7 @@ enum Theme {
         case .duplicates: return Color(red: 0.68, green: 0.48, blue: 1.00)
         case .uninstaller: return Color(red: 1.00, green: 0.38, blue: 0.44)
         case .privacy: return Color(red: 0.40, green: 0.70, blue: 0.98)
+        case .protection: return Color(red: 0.36, green: 0.78, blue: 0.62)
         case .processes: return Color(red: 0.30, green: 0.82, blue: 0.58)
         case .loginItems: return Color(red: 0.98, green: 0.72, blue: 0.25)
         case .maintenance: return Color(red: 0.36, green: 0.80, blue: 0.72)
@@ -62,7 +63,7 @@ enum Theme {
         }
     }
 
-    static let cardRadius: CGFloat = 14
+    static let cardRadius: CGFloat = 16
 
     // More generous spacing scale — the old values were too tight and read as a dense
     // developer tool. CleanMyMac's whole feel comes from whitespace.
@@ -138,21 +139,26 @@ extension View {
     /// small shadow, all lit consistently from the top.
     func glassCard(cornerRadius: CGFloat = Theme.cardRadius, tint: Color? = nil) -> some View {
         self
+            // Frosted glass — a translucent dark fill (not solid) so the app's aura canvas tints
+            // through the card, giving it real depth and floating over the glow rather than sitting
+            // on flat black. Still dark enough to keep text crisp.
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(.ultraThinMaterial)
+            )
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(
                         LinearGradient(
-                            colors: [
-                                Color(red: 0.155, green: 0.155, blue: 0.20),
-                                Color(red: 0.115, green: 0.115, blue: 0.155)
-                            ],
+                            colors: [Color(red: 0.13, green: 0.13, blue: 0.18).opacity(0.55),
+                                     Color(red: 0.09, green: 0.09, blue: 0.13).opacity(0.62)],
                             startPoint: .top, endPoint: .bottom
                         )
                     )
             )
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill((tint ?? .clear).opacity(tint == nil ? 0 : 0.13))
+                    .fill((tint ?? .clear).opacity(tint == nil ? 0 : 0.14))
             )
             // Bright inner top-edge highlight (light from above) — the primary "glass" cue.
             .overlay(
@@ -167,6 +173,25 @@ extension View {
             )
             // Small, soft shadow — light from top, shadow just below. NOT a big muddy blur.
             .shadow(color: Color.black.opacity(0.28), radius: 8, x: 0, y: 4)
+    }
+}
+
+/// The app-wide canvas — a deep base with soft, brand-colored "aura" glows (blue, violet, cyan)
+/// bleeding in from the corners. This is what gives DiskAura its identity: every screen floats
+/// over a subtle glow rather than flat near-black, and the frosted sidebar/cards pick it up.
+struct AuraBackground: View {
+    var body: some View {
+        ZStack {
+            // Deep indigo-black base — not neutral grey, which reads flat/generic.
+            Color(red: 0.038, green: 0.040, blue: 0.062)
+            // One dominant, deep blue glow from the top — the app's signature light source.
+            RadialGradient(colors: [Color(red: 0.20, green: 0.34, blue: 0.92).opacity(0.40), .clear],
+                           center: UnitPoint(x: 0.16, y: -0.12), startRadius: 0, endRadius: 820)
+            // A restrained violet counter-glow, low and to the right, for subtle depth.
+            RadialGradient(colors: [Color(red: 0.44, green: 0.24, blue: 0.74).opacity(0.30), .clear],
+                           center: UnitPoint(x: 1.06, y: 1.08), startRadius: 0, endRadius: 780)
+        }
+        .ignoresSafeArea()
     }
 }
 

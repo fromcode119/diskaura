@@ -4,6 +4,7 @@ import SwiftUI
 /// delete?" and it answers from the real facts about this Mac — no cloud, nothing leaves the device.
 struct AssistantView: View {
     @ObservedObject var scanVM: ScanViewModel
+    @ObservedObject var router: AppRouter
 
     @State private var messages: [Message] = []
     @State private var input: String = ""
@@ -46,7 +47,6 @@ struct AssistantView: View {
                 inputBar
             }
         }
-        .background(Theme.appGradient)
         .onAppear { if facts == nil { prepare() } }
     }
 
@@ -80,7 +80,21 @@ struct AssistantView: View {
                     if messages.isEmpty {
                         emptyState
                     }
-                    ForEach(messages) { message in bubble(message).id(message.id) }
+                    ForEach(messages) { message in
+                        VStack(alignment: message.fromUser ? .trailing : .leading, spacing: 6) {
+                            bubble(message)
+                            if !message.fromUser, let tab = suggestedTab(message.text) {
+                                Button { router.selectedTab = tab } label: {
+                                    Label("Open \(tab.rawValue)", systemImage: "arrow.right.circle.fill")
+                                        .font(.system(size: 11, weight: .semibold))
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundColor(Theme.moduleColor(.smartRules))
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: message.fromUser ? .trailing : .leading)
+                        .id(message.id)
+                    }
                     if isThinking {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
@@ -107,7 +121,7 @@ struct AssistantView: View {
     private func bubble(_ message: Message) -> some View {
         HStack {
             if message.fromUser { Spacer(minLength: 40) }
-            Text(message.text)
+            Text(.init(message.text))   // render **bold** section names as markdown
                 .font(.system(size: 12.5))
                 .padding(.horizontal, 12).padding(.vertical, 9)
                 .background(message.fromUser ? Theme.moduleColor(.smartRules).opacity(0.9) : Theme.panelBackground)
@@ -137,6 +151,20 @@ struct AssistantView: View {
 
     private var canSend: Bool { !input.trimmingCharacters(in: .whitespaces).isEmpty && !isThinking && !isPreparing }
 
+    /// Detects which DiskAura section the reply pointed the user to, so we can offer a jump button.
+    private func suggestedTab(_ text: String) -> SidebarTab? {
+        let t = text.lowercased()
+        if t.contains("cleanup") || t.contains("system junk") { return .cleanup }
+        if t.contains("large") && t.contains("old") { return .largeOldFiles }
+        if t.contains("duplicat") { return .duplicates }
+        if t.contains("uninstall") { return .uninstaller }
+        if t.contains("system data") { return .systemData }
+        if t.contains("smart rules") { return .smartRules }
+        if t.contains("privacy") { return .privacy }
+        if t.contains("disk scan") || t.contains("sunburst") { return .scan }
+        return nil
+    }
+
     // MARK: - Logic
 
     private func prepare() {
@@ -160,13 +188,19 @@ struct AssistantView: View {
 
     private func send(_ text: String) {
         let question = text.trimmingCharacters(in: .whitespaces)
-        guard !question.isEmpty, !isThinking, let box = serviceBox else { return }
+        guard !question.isEmpty, !isThinking else { return }
         input = ""
         messages.append(Message(fromUser: true, text: question))
         isThinking = true
         Task {
+            // The service is built after the disk facts finish loading; if the user asks before
+            // that (e.g. taps a suggestion while it still says "Reading your disk…"), wait for it
+            // instead of silently dropping the question.
+            while serviceBox?.instance == nil && isPreparing {
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
             let reply: String
-            if #available(macOS 26.0, *), let service = box.instance as? AssistantService {
+            if #available(macOS 26.0, *), let service = serviceBox?.instance as? AssistantService {
                 reply = await service.answer(question)
             } else {
                 reply = "The assistant isn't available on this Mac."

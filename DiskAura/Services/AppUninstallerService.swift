@@ -34,6 +34,23 @@ enum AppUninstallerService {
         "/Library/Extensions",
         "/Library/Audio/Plug-Ins/HAL",
         "/var/db/receipts",
+        // Additional app-leftover locations (plug-ins, prefpanes, screensavers, quicklook,
+        // spotlight importers, services, input methods, mail bundles) — where apps commonly
+        // scatter components that a basic "drag to Trash" leaves behind.
+        "~/Library/Internet Plug-Ins",
+        "~/Library/PreferencePanes",
+        "~/Library/Screen Savers",
+        "~/Library/QuickLook",
+        "~/Library/Spotlight",
+        "~/Library/Services",
+        "~/Library/Input Methods",
+        "~/Library/Mail/Bundles",
+        "~/Library/Application Support/CrashReporter",
+        "/Library/Internet Plug-Ins",
+        "/Library/PreferencePanes",
+        "/Library/QuickLook",
+        "/Library/Spotlight",
+        "/Library/Services",
     ]
 
     /// Fast listing: bundle names/IDs only, no recursive size scan. Computing every app's

@@ -28,25 +28,47 @@ struct StatHero: View {
     private var tileRowHeight: CGFloat { (Self.height - Self.rowGap) / 2 }
 
     var body: some View {
-        // Explicit heights (not maxHeight:.infinity) so the donut card and every tile are
-        // pixel-identical in height — otherwise the intrinsic sizes drift a few points and the
-        // cards visibly fail to line up.
-        HStack(alignment: .top, spacing: 12) {
-            HStack(spacing: 18) {
-                CategoryDonut(segments: segments, centerValue: centerValue, centerLabel: centerLabel,
-                              size: 116, lineWidth: 15)
-                DonutLegend(segments: segments).frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(16)
-            .frame(width: Self.donutCardWidth, height: Self.height, alignment: .center)
-            .glassCard()
+        // Side-by-side when there's room; when the window is too narrow the donut card and the
+        // tiles stack vertically instead of the tiles overflowing off the window edge.
+        ViewThatFits(in: .horizontal) {
+            horizontalLayout
+            verticalLayout
+        }
+    }
 
-            VStack(spacing: Self.rowGap) {
-                HStack(spacing: 12) { tile(at: 0); tile(at: 1) }
-                HStack(spacing: 12) { tile(at: 2); tile(at: 3) }
-            }
+    private var donutCard: some View {
+        HStack(spacing: 18) {
+            CategoryDonut(segments: segments, centerValue: centerValue, centerLabel: centerLabel,
+                          size: 116, lineWidth: 15)
+            DonutLegend(segments: segments).frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(16)
+        .frame(height: Self.height, alignment: .center)
+        .glassCard()
+    }
+
+    private var tilesGrid: some View {
+        VStack(spacing: Self.rowGap) {
+            HStack(spacing: 12) { tile(at: 0); tile(at: 1) }
+            HStack(spacing: 12) { tile(at: 2); tile(at: 3) }
+        }
+    }
+
+    /// Fixed widths give this option a definite ideal size, so ViewThatFits can tell when it no
+    /// longer fits and fall back to the vertical layout.
+    private var horizontalLayout: some View {
+        HStack(alignment: .top, spacing: 12) {
+            donutCard.frame(width: Self.donutCardWidth)
+            tilesGrid.frame(width: 440)   // tiles need real room; if it doesn't fit, stack vertically
         }
         .frame(height: Self.height)
+    }
+
+    private var verticalLayout: some View {
+        VStack(spacing: 12) {
+            donutCard.frame(maxWidth: .infinity)
+            tilesGrid
+        }
     }
 
     @ViewBuilder private func tile(at index: Int) -> some View {

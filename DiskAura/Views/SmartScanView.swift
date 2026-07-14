@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// Smart Scan — the one-tap overview. Runs the safe analyzers across the app and shows a single
-/// combined "reclaimable" total plus routed findings that jump to the module handling each one.
+/// Smart Scan — the dashboard landing. A big disk-usage ring hero + circular live stats, then a
+/// one-tap scan that aggregates system junk + browser caches + Trash into routed findings.
 struct SmartScanView: View {
     @ObservedObject var router: AppRouter
-    @StateObject private var viewModel = SmartScanViewModel()
+    @ObservedObject var viewModel: SmartScanViewModel
 
     private var accent: Color { Theme.moduleColor(.smartScan) }
 
@@ -12,15 +12,29 @@ struct SmartScanView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            content
+            ScrollView {
+                VStack(spacing: Theme.Spacing.lg) {
+                    hero
+                    miniStatsRow
+                    if viewModel.hasScanned {
+                        findingsSection
+                    } else {
+                        scanCTA
+                    }
+                }
+                .padding(Theme.Spacing.lg)
+                .frame(maxWidth: 720)
+                .frame(maxWidth: .infinity)
+            }
         }
+        .onAppear { viewModel.loadStats() }
     }
 
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Smart Scan").font(Theme.TypeScale.title)
-                Text("One tap to see everything you can reclaim")
+                Text("Your Mac at a glance — one tap to reclaim space")
                     .font(.system(size: 11)).foregroundColor(.secondary)
             }
             Spacer()
@@ -32,81 +46,67 @@ struct SmartScanView: View {
         .padding(Theme.Spacing.md)
     }
 
-    @ViewBuilder
-    private var content: some View {
-        if !viewModel.hasScanned {
-            idleState
-        } else {
-            ScrollView {
-                VStack(spacing: Theme.Spacing.md) {
-                    heroTotal
-                    if viewModel.findings.isEmpty {
-                        allClear
-                    } else {
-                        ForEach(viewModel.findings) { finding in findingCard(finding) }
-                    }
-                }
-                .padding(Theme.Spacing.lg)
-            }
+    // MARK: - Hero ring
+
+    private var hero: some View {
+        let showReclaimable = viewModel.hasScanned && viewModel.reclaimableBytes > 0
+        return RingGauge(
+            fraction: showReclaimable
+                ? Double(viewModel.reclaimableBytes) / Double(max(viewModel.diskTotal, 1))
+                : viewModel.diskUsedFraction,
+            centerValue: showReclaimable ? viewModel.reclaimableBytes.formattedBytes : viewModel.diskFree.formattedBytes,
+            centerLabel: showReclaimable ? "reclaimable" : "free of \(viewModel.diskTotal.formattedBytes)",
+            color: showReclaimable ? accent : Color(red: 0.36, green: 0.62, blue: 1.0),
+            size: 220, lineWidth: 20
+        )
+        .frame(maxWidth: .infinity)
+        .padding(.top, 6)
+    }
+
+    private var miniStatsRow: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            MiniRingStat(fraction: viewModel.diskUsedFraction, value: viewModel.diskUsed.formattedBytes,
+                         label: "Used", color: Color(red: 0.36, green: 0.62, blue: 1.0), icon: "internaldrive.fill")
+            MiniRingStat(fraction: viewModel.memUsedFraction, value: viewModel.memUsedBytes.formattedMemoryBytes,
+                         label: "Memory", color: Color(red: 0.68, green: 0.48, blue: 1.0), icon: "memorychip.fill")
+            MiniRingStat(fraction: viewModel.diskTotal > 0 ? Double(viewModel.trashBytes) / Double(viewModel.diskTotal) : 0,
+                         value: viewModel.trashBytes.formattedBytes,
+                         label: "Trash", color: Color(red: 0.30, green: 0.80, blue: 0.90), icon: "trash.fill")
         }
     }
 
-    private var idleState: some View {
-        VStack(spacing: 20) {
-            ZStack {
-                Circle().fill(Theme.accentGradient).frame(width: 110, height: 110).opacity(0.9)
-                if viewModel.scanning {
-                    ProgressView().controlSize(.large).tint(.white)
-                } else {
-                    Image(systemName: "bolt.fill").font(.system(size: 44, weight: .medium)).foregroundColor(.white)
-                }
-            }
-            VStack(spacing: 5) {
-                Text(viewModel.scanning ? "Scanning…" : "Ready when you are")
-                    .font(Theme.TypeScale.sectionTitle)
-                Text("Smart Scan checks system junk, browser caches, and the Trash in one pass.")
-                    .font(.system(size: 12)).foregroundColor(.secondary).multilineTextAlignment(.center)
-            }
+    private var scanCTA: some View {
+        VStack(spacing: 12) {
             Button { viewModel.scan() } label: {
-                Label("Smart Scan", systemImage: "bolt.fill")
+                Label(viewModel.scanning ? "Scanning…" : "Smart Scan", systemImage: "bolt.fill")
             }
             .buttonStyle(.gradientPill).controlSize(.large).disabled(viewModel.scanning)
+            Text("Checks system junk, browser caches, and the Trash in one pass.")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(40)
+        .padding(.top, 4)
     }
 
-    private var heroTotal: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                Circle().fill(accent.opacity(0.16)).frame(width: 72, height: 72)
-                Image(systemName: "bolt.fill").font(.system(size: 30)).foregroundColor(accent)
+    private var findingsSection: some View {
+        VStack(spacing: Theme.Spacing.sm) {
+            if viewModel.findings.isEmpty {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.seal.fill").foregroundColor(Theme.moduleColor(.processes))
+                    Text("Nothing to reclaim — you're all clean.").font(.system(size: 13, weight: .medium))
+                    Spacer()
+                }
+                .padding(16).glassCard()
+            } else {
+                ForEach(viewModel.findings) { findingCard($0) }
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(viewModel.totalBytes.formattedBytes)
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                Text("reclaimable across \(viewModel.findings.count) area\(viewModel.findings.count == 1 ? "" : "s")")
-                    .font(.system(size: 12)).foregroundColor(.secondary)
-            }
-            Spacer()
         }
-        .padding(Theme.Spacing.md)
-        .glassCard()
-    }
-
-    private var allClear: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "checkmark.seal.fill").font(.system(size: 40)).foregroundColor(Theme.moduleColor(.processes))
-            Text("Nothing to reclaim — you're all clean.").foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity).padding(.vertical, 30)
     }
 
     private func findingCard(_ finding: SmartFinding) -> some View {
         HStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8).fill(Theme.moduleColor(finding.tab).opacity(0.16)).frame(width: 36, height: 36)
-                Image(systemName: finding.icon).font(.system(size: 15)).foregroundColor(Theme.moduleColor(finding.tab))
+                RoundedRectangle(cornerRadius: 9).fill(Theme.moduleColor(finding.tab).opacity(0.16)).frame(width: 38, height: 38)
+                Image(systemName: finding.icon).font(.system(size: 16)).foregroundColor(Theme.moduleColor(finding.tab))
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(finding.title).font(.system(size: 13.5, weight: .semibold))
