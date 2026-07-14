@@ -4,6 +4,7 @@ import SwiftUI
 /// delete?" and it answers from the real facts about this Mac — no cloud, nothing leaves the device.
 struct AssistantView: View {
     @ObservedObject var scanVM: ScanViewModel
+    @ObservedObject var router: AppRouter
 
     @State private var messages: [Message] = []
     @State private var input: String = ""
@@ -79,7 +80,21 @@ struct AssistantView: View {
                     if messages.isEmpty {
                         emptyState
                     }
-                    ForEach(messages) { message in bubble(message).id(message.id) }
+                    ForEach(messages) { message in
+                        VStack(alignment: message.fromUser ? .trailing : .leading, spacing: 6) {
+                            bubble(message)
+                            if !message.fromUser, let tab = suggestedTab(message.text) {
+                                Button { router.selectedTab = tab } label: {
+                                    Label("Open \(tab.rawValue)", systemImage: "arrow.right.circle.fill")
+                                        .font(.system(size: 11, weight: .semibold))
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundColor(Theme.moduleColor(.smartRules))
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: message.fromUser ? .trailing : .leading)
+                        .id(message.id)
+                    }
                     if isThinking {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
@@ -135,6 +150,20 @@ struct AssistantView: View {
     }
 
     private var canSend: Bool { !input.trimmingCharacters(in: .whitespaces).isEmpty && !isThinking && !isPreparing }
+
+    /// Detects which DiskAura section the reply pointed the user to, so we can offer a jump button.
+    private func suggestedTab(_ text: String) -> SidebarTab? {
+        let t = text.lowercased()
+        if t.contains("cleanup") || t.contains("system junk") { return .cleanup }
+        if t.contains("large") && t.contains("old") { return .largeOldFiles }
+        if t.contains("duplicat") { return .duplicates }
+        if t.contains("uninstall") { return .uninstaller }
+        if t.contains("system data") { return .systemData }
+        if t.contains("smart rules") { return .smartRules }
+        if t.contains("privacy") { return .privacy }
+        if t.contains("disk scan") || t.contains("sunburst") { return .scan }
+        return nil
+    }
 
     // MARK: - Logic
 

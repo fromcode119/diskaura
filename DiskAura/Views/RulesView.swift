@@ -108,7 +108,7 @@ struct RulesView: View {
             }
             Divider()
             if matches.isEmpty {
-                Text("No files in \(folder.lastPathComponent) match this rule.")
+                Text("Checked \(folder.lastPathComponent) — nothing matches this rule right now (e.g. no files that old/large/of that type). Try a different rule or folder.")
                     .font(.system(size: 11)).foregroundColor(.secondary)
             } else {
                 Text("\(matches.count) matching file\(matches.count == 1 ? "" : "s")")

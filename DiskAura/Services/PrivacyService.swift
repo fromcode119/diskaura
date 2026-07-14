@@ -75,19 +75,27 @@ enum PrivacyService {
     }
 
     /// Moves each selected item's files to the Trash. Returns count + bytes reclaimed.
-    static func clean(_ items: [PrivacyItem]) -> (cleaned: Int, bytes: Int64) {
+    static func clean(_ items: [PrivacyItem]) -> (cleaned: Int, bytes: Int64, failed: Int) {
         var cleaned = 0
         var bytes: Int64 = 0
+        var failed = 0
         for item in items {
+            var anyCleaned = false
             for url in item.paths {
                 do {
                     try FileManager.default.trashItem(at: url, resultingItemURL: nil)
                     cleaned += 1
-                } catch { continue }
+                    anyCleaned = true
+                } catch {
+                    // Safari's data (and some others) lives in TCC-protected locations that need
+                    // Full Disk Access; trashItem fails there. Surface that instead of silently
+                    // doing nothing.
+                    failed += 1
+                }
             }
-            bytes += item.sizeBytes
+            if anyCleaned { bytes += item.sizeBytes }
         }
-        return (cleaned, bytes)
+        return (cleaned, bytes, failed)
     }
 
     // MARK: - Known locations

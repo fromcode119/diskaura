@@ -94,7 +94,30 @@ struct ContentView: View {
     @StateObject private var protectionVM = ProtectionViewModel()
     @State private var showActionQueue = false
     @State private var showRecovery = false
+    @State private var visited: Set<SidebarTab> = []
     @ObservedObject private var undoStore = UndoHistoryStore.shared
+
+    @ViewBuilder
+    private func tabContent(_ tab: SidebarTab) -> some View {
+        switch tab {
+        case .smartScan: SmartScanView(router: router, viewModel: smartScanVM)
+        case .scan: ScanView(scanVM: scanVM, actionQueueVM: actionQueueVM)
+        case .largeOldFiles: LargeOldFilesView(root: scanVM.result?.root, actionQueueVM: actionQueueVM)
+        case .systemData: SystemDataView(router: router)
+        case .cleanup: CleanupView(actionQueueVM: actionQueueVM)
+        case .smartRules: RulesView()
+        case .assistant: AssistantView(scanVM: scanVM, router: router)
+        case .duplicates: DuplicateFinderView(actionQueueVM: actionQueueVM, sharedRootURL: scanVM.result?.root.url)
+        case .uninstaller: UninstallerView(actionQueueVM: actionQueueVM)
+        case .privacy: PrivacyView(viewModel: privacyVM)
+        case .protection: ProtectionView(viewModel: protectionVM)
+        case .processes: ProcessTableView(viewModel: processVM)
+        case .loginItems: LoginItemsView()
+        case .maintenance: MaintenanceView()
+        case .shredder: ShredderView()
+        case .settings: SettingsView(classification: scanVM.classification, actionQueueVM: actionQueueVM, scheduledScan: scheduledScan, exclusions: scanVM.exclusions)
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -102,42 +125,17 @@ struct ContentView: View {
             HStack(spacing: 0) {
             sidebar
 
-            Group {
-                switch selectedTab {
-                case .smartScan:
-                    SmartScanView(router: router, viewModel: smartScanVM)
-                case .scan:
-                    ScanView(scanVM: scanVM, actionQueueVM: actionQueueVM)
-                case .largeOldFiles:
-                    LargeOldFilesView(root: scanVM.result?.root, actionQueueVM: actionQueueVM)
-                case .systemData:
-                    SystemDataView(router: router)
-                case .cleanup:
-                    CleanupView(actionQueueVM: actionQueueVM)
-                case .smartRules:
-                    RulesView()
-                case .assistant:
-                    AssistantView(scanVM: scanVM)
-                case .duplicates:
-                    DuplicateFinderView(actionQueueVM: actionQueueVM, sharedRootURL: scanVM.result?.root.url)
-                case .uninstaller:
-                    UninstallerView(actionQueueVM: actionQueueVM)
-                case .privacy:
-                    PrivacyView(viewModel: privacyVM)
-                case .protection:
-                    ProtectionView(viewModel: protectionVM)
-                case .processes:
-                    ProcessTableView(viewModel: processVM)
-                        .onAppear { processVM.start() }
-                        .onDisappear { processVM.stop() }
-                case .loginItems:
-                    LoginItemsView()
-                case .maintenance:
-                    MaintenanceView()
-                case .shredder:
-                    ShredderView()
-                case .settings:
-                    SettingsView(classification: scanVM.classification, actionQueueVM: actionQueueVM, scheduledScan: scheduledScan, exclusions: scanVM.exclusions)
+            // Keep every visited tab ALIVE (created on first visit, then hidden rather than
+            // destroyed) so switching tabs never throws away a scan/conversation/selection. The
+            // active tab is shown; the rest sit at opacity 0 with hit-testing off.
+            ZStack {
+                ForEach(SidebarTab.allCases) { tab in
+                    if visited.contains(tab) {
+                        tabContent(tab)
+                            .opacity(tab == selectedTab ? 1 : 0)
+                            .allowsHitTesting(tab == selectedTab)
+                            .zIndex(tab == selectedTab ? 1 : 0)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -171,7 +169,17 @@ struct ContentView: View {
             // edge instead of below a ~28px reserved band, which read as a big empty gap.
             .ignoresSafeArea(.container, edges: .top)
         }
-        .onAppear { scheduledScan.attach(to: scanVM) }
+        .onAppear {
+            scheduledScan.attach(to: scanVM)
+            visited.insert(selectedTab)
+            if selectedTab == .processes { processVM.start() }
+        }
+        // Views are kept alive, so onDisappear no longer fires on tab switch — drive the
+        // Processes sampler (and future per-tab lifecycles) off the selected tab instead.
+        .onChange(of: selectedTab) { _, tab in
+            visited.insert(tab)
+            if tab == .processes { processVM.start() } else { processVM.stop() }
+        }
     }
 
     /// Wide labeled sidebar (CleanMyMac's actual layout) — colored icon + text label per
