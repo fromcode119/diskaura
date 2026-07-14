@@ -68,14 +68,28 @@ struct CategoryDonut: View {
 /// thin proportion bar, exactly like CleanMyMac's memory breakdown list.
 struct DonutLegend: View {
     let segments: [DonutSegment]
+    /// Cap the number of rows so the legend always fits the fixed-height hero card; anything past
+    /// the cap is aggregated into a single "Others" row instead of overflowing / being clipped.
+    var maxRows: Int = 6
 
     private var total: Int64 {
         max(1, segments.reduce(0) { $0 + max(0, $1.sizeBytes) })
     }
 
+    private var displayed: [DonutSegment] {
+        guard segments.count > maxRows else { return segments }
+        let sorted = segments.sorted { $0.sizeBytes > $1.sizeBytes }
+        let head = Array(sorted.prefix(maxRows - 1))
+        let rest = sorted.dropFirst(maxRows - 1)
+        let othersBytes = rest.reduce(Int64(0)) { $0 + $1.sizeBytes }
+        let others = DonutSegment(id: "__others", label: "\(rest.count) others",
+                                  sizeBytes: othersBytes, color: Color.secondary)
+        return head + [others]
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
-            ForEach(segments) { seg in
+            ForEach(displayed) { seg in
                 HStack(spacing: 10) {
                     Circle().fill(seg.color).frame(width: 9, height: 9)
                     Text(seg.label)
