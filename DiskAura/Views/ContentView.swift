@@ -172,6 +172,7 @@ struct ContentView: View {
         .onAppear {
             scheduledScan.attach(to: scanVM)
             visited.insert(selectedTab)
+            VolumeStatsStore.shared.startPolling()
             if selectedTab == .processes { processVM.start() }
         }
         // Views are kept alive, so onDisappear no longer fires on tab switch — drive the
@@ -179,6 +180,9 @@ struct ContentView: View {
         .onChange(of: selectedTab) { _, tab in
             visited.insert(tab)
             if tab == .processes { processVM.start() } else { processVM.stop() }
+            // Keep-alive tabs fire onAppear only once, so refresh the Smart Scan stats each time
+            // it's revisited — otherwise its free-space number freezes at first-open value.
+            if tab == .smartScan { smartScanVM.loadStats() }
         }
     }
 

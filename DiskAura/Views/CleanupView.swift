@@ -265,6 +265,12 @@ struct CleanupView: View {
             Text(bannerText(result))
                 .font(.system(size: 12, weight: .medium))
             Spacer()
+            // Cleaning moves to Trash (recoverable) — free space only rises once it's emptied.
+            // Offer that explicitly so freeing is actually visible.
+            if result.movedCount > 0 && !result.emptiedTrash {
+                Button("Empty Trash to reclaim") { viewModel.emptyTrashToReclaim() }
+                    .buttonStyle(.borderedProminent).controlSize(.small)
+            }
             if !result.restorePairs.isEmpty {
                 Button("Undo") { viewModel.undoLastClean() }
                     .buttonStyle(.bordered).controlSize(.small)
@@ -277,8 +283,12 @@ struct CleanupView: View {
 
     private func bannerText(_ result: CleanupViewModel.CleanResult) -> String {
         var parts: [String] = []
-        if result.movedCount > 0 { parts.append("Cleaned \(result.movedCount) items · freed \(result.freedBytes.formattedBytes)") }
-        if result.emptiedTrash { parts.append(result.movedCount > 0 ? "and emptied the Trash" : "Emptied the Trash") }
+        if result.movedCount > 0 {
+            // Be honest about state: emptied = reclaimed on disk; not emptied = still in Trash.
+            let verb = result.emptiedTrash ? "reclaimed" : "moved to Trash ·"
+            parts.append("Cleaned \(result.movedCount) items · \(verb) \(result.freedBytes.formattedBytes)")
+        }
+        if result.emptiedTrash && result.movedCount == 0 { parts.append("Emptied the Trash") }
         return parts.isEmpty ? "Nothing to clean" : parts.joined(separator: " ")
     }
 

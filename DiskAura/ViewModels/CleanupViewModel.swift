@@ -100,6 +100,23 @@ final class CleanupViewModel: ObservableObject {
             // Optimistic update — no full re-scan.
             self.store.applyCleaned(itemPaths: Set(items.map { $0.url.path }), emptiedTrash: emptyTrash)
             self.selectedCategoryIDs = self.selectedCategoryIDs.filter { id in self.categories.contains { $0.id == id } }
+            // Make the freed space visible immediately across every surface.
+            VolumeStatsStore.shared.refresh()
+        }
+    }
+
+    /// Empties the Trash so space cleaned into it is *physically* reclaimed, then refreshes the
+    /// free-space number. This is the missing link between "I cleaned" and "I see more free space":
+    /// cleanup moves to Trash (recoverable), so free space only rises once the Trash is emptied.
+    func emptyTrashToReclaim() {
+        Task {
+            await Task.detached(priority: .userInitiated) { TrashService.empty() }.value
+            if var r = self.lastCleanResult {
+                r = CleanResult(movedCount: r.movedCount, freedBytes: r.freedBytes,
+                                emptiedTrash: true, restorePairs: r.restorePairs)
+                self.lastCleanResult = r
+            }
+            VolumeStatsStore.shared.refresh()
         }
     }
 

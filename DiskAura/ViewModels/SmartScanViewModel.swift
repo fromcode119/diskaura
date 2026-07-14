@@ -20,7 +20,11 @@ final class SmartScanViewModel: ObservableObject {
     var diskUsedFraction: Double { diskTotal > 0 ? Double(diskUsed) / Double(diskTotal) : 0 }
 
     func loadStats() {
-        if let s = VolumeInfoService.stats(for: FileManager.default.homeDirectoryForCurrentUser) {
+        // Read from the shared live store (force a fresh read first) so this never shows a stale
+        // number when the keep-alive tab is revisited.
+        let store = VolumeStatsStore.shared
+        store.refresh()
+        if let s = store.stats {
             diskTotal = s.totalBytes; diskUsed = s.usedBytes; diskFree = s.freeBytes
         }
         let m = SystemStatsService.memory()
