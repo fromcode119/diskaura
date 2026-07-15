@@ -29,10 +29,16 @@ struct RingGauge: View {
             VStack(spacing: 2) {
                 Text(centerValue)
                     .font(.system(size: size * 0.2, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.4)
                 Text(centerLabel)
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
             }
+            // Keep text within the ring's inner circle so long values never touch the arc.
+            .frame(width: size * 0.66)
         }
         .frame(width: size, height: size)
     }

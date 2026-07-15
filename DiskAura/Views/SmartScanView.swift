@@ -15,6 +15,7 @@ struct SmartScanView: View {
             ScrollView {
                 VStack(spacing: Theme.Spacing.lg) {
                     hero
+                    if viewModel.trashBytes > 0 { trashReclaimRow }
                     miniStatsRow
                     if viewModel.hasScanned {
                         findingsSection
@@ -63,6 +64,21 @@ struct SmartScanView: View {
         .padding(.top, 6)
     }
 
+    /// Cleaned files go to the Trash (recoverable) — free space only rises once it's emptied. This
+    /// makes that reclaimable-in-Trash amount visible and actionable right on the dashboard.
+    private var trashReclaimRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "trash.fill").foregroundColor(Theme.moduleColor(.cleanup))
+            Text("\(viewModel.trashBytes.formattedBytes) sitting in the Trash — empty it to actually free that space.")
+                .font(.system(size: 12)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            Button("Empty Trash") { viewModel.emptyTrash() }
+                .buttonStyle(.pill(Theme.moduleColor(.cleanup))).controlSize(.small)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .glassCard()
+    }
+
     private var miniStatsRow: some View {
         HStack(spacing: Theme.Spacing.sm) {
             MiniRingStat(fraction: viewModel.diskUsedFraction, value: viewModel.diskUsed.formattedBytes,
@@ -81,8 +97,16 @@ struct SmartScanView: View {
                 Label(viewModel.scanning ? "Scanning…" : "Smart Scan", systemImage: "bolt.fill")
             }
             .buttonStyle(.gradientPill).controlSize(.large).disabled(viewModel.scanning)
-            Text("Checks system junk, browser caches, and the Trash in one pass.")
-                .font(.system(size: 11)).foregroundStyle(.secondary)
+            if viewModel.scanning {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Scanning caches, developer junk and the Trash — this can take a minute on a full disk.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Checks system junk, browser caches, and the Trash in one pass.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
         }
         .padding(.top, 4)
     }

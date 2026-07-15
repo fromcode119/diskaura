@@ -19,6 +19,16 @@ final class SmartScanViewModel: ObservableObject {
     var reclaimableBytes: Int64 { findings.reduce(0) { $0 + $1.bytes } }
     var diskUsedFraction: Double { diskTotal > 0 ? Double(diskUsed) / Double(diskTotal) : 0 }
 
+    /// Empties the Trash and refreshes stats — space cleaned into the Trash isn't reclaimed on disk
+    /// until it's emptied, so this is how the free-space number actually moves.
+    func emptyTrash() {
+        Task {
+            await Task.detached(priority: .userInitiated) { TrashService.empty() }.value
+            VolumeStatsStore.shared.refresh()
+            loadStats()
+        }
+    }
+
     func loadStats() {
         // Read from the shared live store (force a fresh read first) so this never shows a stale
         // number when the keep-alive tab is revisited.
@@ -40,11 +50,24 @@ final class SmartScanViewModel: ObservableObject {
         guard !scanning else { return }
         scanning = true
         Task {
-            let results = await SmartScanService.scan()
+            // Guard against any single analyzer hanging (a pathological cache dir, tmutil stall):
+            // race the scan against a timeout so `scanning` can never wedge on forever.
+            let results = await Self.withTimeout(seconds: 90) { await SmartScanService.scan() } ?? []
             findings = results
             scanning = false
             hasScanned = true
             loadStats()
+        }
+    }
+
+    /// Runs `work`, returning nil if it doesn't finish within `seconds`.
+    private static func withTimeout<T: Sendable>(seconds: Double, _ work: @escaping @Sendable () async -> T) async -> T? {
+        await withTaskGroup(of: T?.self) { group in
+            group.addTask { await work() }
+            group.addTask { try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000)); return nil }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
         }
     }
 }
