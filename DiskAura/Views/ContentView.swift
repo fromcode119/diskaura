@@ -24,6 +24,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case loginItems = "Login Items"
     case maintenance = "Maintenance"
     case shredder = "Secure Shredder"
+    case fanThermal = "Fan & Thermal"
     case settings = "Settings"
 
     var id: String { rawValue }
@@ -46,6 +47,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .loginItems: return "Login items"
         case .maintenance: return "Maintenance"
         case .shredder: return "Shredder"
+        case .fanThermal: return "Fan & thermal"
         case .settings: return "Settings"
         }
     }
@@ -54,7 +56,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         switch self {
         case .smartScan, .scan, .largeOldFiles: return .scanner
         case .systemData, .cleanup, .smartRules, .assistant, .duplicates, .uninstaller, .privacy, .protection: return .cleanup
-        case .processes, .loginItems, .maintenance, .shredder, .settings: return .system
+        case .processes, .loginItems, .maintenance, .shredder, .fanThermal, .settings: return .system
         }
     }
 
@@ -75,6 +77,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .loginItems: return "power.circle.fill"
         case .maintenance: return "wrench.and.screwdriver.fill"
         case .shredder: return "flame.fill"
+        case .fanThermal: return "fanblades.fill"
         case .settings: return "gearshape.fill"
         }
     }
@@ -92,6 +95,7 @@ struct ContentView: View {
     @StateObject private var smartScanVM = SmartScanViewModel()
     @StateObject private var privacyVM = PrivacyViewModel()
     @StateObject private var protectionVM = ProtectionViewModel()
+    @StateObject private var fanVM = FanThermalService()
     @State private var showActionQueue = false
     @State private var showRecovery = false
     @State private var visited: Set<SidebarTab> = []
@@ -115,6 +119,7 @@ struct ContentView: View {
         case .loginItems: LoginItemsView()
         case .maintenance: MaintenanceView()
         case .shredder: ShredderView()
+        case .fanThermal: FanThermalView(viewModel: fanVM, processVM: processVM)
         case .settings: SettingsView(classification: scanVM.classification, actionQueueVM: actionQueueVM, scheduledScan: scheduledScan, exclusions: scanVM.exclusions)
         }
     }
@@ -179,7 +184,9 @@ struct ContentView: View {
         // Processes sampler (and future per-tab lifecycles) off the selected tab instead.
         .onChange(of: selectedTab) { _, tab in
             visited.insert(tab)
-            if tab == .processes { processVM.start() } else { processVM.stop() }
+            // Processes sampler is needed by both the Processes tab and the Fan/Thermal "why loud".
+            if tab == .processes || tab == .fanThermal { processVM.start() } else { processVM.stop() }
+            if tab == .fanThermal { fanVM.start() } else { fanVM.stop() }
             // Keep-alive tabs fire onAppear only once, so refresh the Smart Scan stats each time
             // it's revisited — otherwise its free-space number freezes at first-open value.
             if tab == .smartScan { smartScanVM.loadStats() }
