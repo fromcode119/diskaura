@@ -32,7 +32,9 @@ final class MenuBarVolumeMonitor: ObservableObject {
     }
 
     func refresh() {
-        stats = VolumeInfoService.stats(for: FileManager.default.homeDirectoryForCurrentUser)
+        // Read through the shared store so the menu bar and every in-app surface show one number.
+        VolumeStatsStore.shared.refresh()
+        stats = VolumeStatsStore.shared.stats
 
         // Edge-triggered: only fire once when crossing into "low", not every 30s tick.
         if isLow, !wasLow, let stats {
