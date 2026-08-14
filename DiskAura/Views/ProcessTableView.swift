@@ -20,13 +20,45 @@ struct ProcessTableView: View {
             }
         }
         .onReceive(tempTicker) { _ in temp = SystemStatsService.temperature() }
-        .alert("Quit Failed", isPresented: Binding(
+        // Pinned to the window so a 20s quit always shows visible progress, wherever you're scrolled.
+        .overlay(alignment: .bottom) { quitStatusToast }
+        .alert(viewModel.forceQuitTarget == nil ? "Quit Failed" : "App Didn't Quit", isPresented: Binding(
             get: { viewModel.quitError != nil },
-            set: { if !$0 { viewModel.quitError = nil } }
+            set: { if !$0 { viewModel.quitError = nil; viewModel.forceQuitTarget = nil } }
         )) {
-            Button("OK", role: .cancel) {}
+            // Escalation is only offered when a polite quit was actually ignored — force-quitting
+            // loses unsaved work, so it's never the default action.
+            // Capture the target HERE: dismissing the alert clears forceQuitTarget before the
+            // action runs, so reading it inside the closure made this button do nothing.
+            if let target = viewModel.forceQuitTarget {
+                Button("Force Quit", role: .destructive) {
+                    viewModel.forceQuit(pid: target.pid, name: target.name)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text(viewModel.quitError ?? "")
+        }
+    }
+
+    /// Live "Quitting X… 6s" indicator — a quit can take 20s, and silence reads as a dead button.
+    @ViewBuilder private var quitStatusToast: some View {
+        if let msg = viewModel.busyMessage {
+            HStack(spacing: 9) {
+                if msg.hasSuffix("quit.") {
+                    Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                } else {
+                    ProgressView().controlSize(.small)
+                }
+                Text(msg).font(.system(size: 12, weight: .medium))
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.14), lineWidth: 1))
+            .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
+            .padding(.bottom, 20)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .animation(.easeInOut(duration: 0.18), value: viewModel.busyMessage)
         }
     }
 
@@ -211,7 +243,7 @@ struct ProcessTableView: View {
                         process: proc,
                         canQuit: canQuit,
                         memoryFraction: maxMemory > 0 ? Double(proc.memoryBytes) / Double(maxMemory) : 0,
-                        onQuit: { viewModel.quit(proc) }
+                        onQuit: { viewModel.quit(proc) }, isQuitting: viewModel.quittingPIDs.contains(proc.id)
                     )
                     if proc.id != processes.last?.id {
                         Divider().padding(.leading, 46)
@@ -258,7 +290,7 @@ struct ProcessTableView: View {
                     Section {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { i, proc in
                             AllProcessRow(process: proc, memFraction: maxMem > 0 ? Double(proc.memoryBytes) / Double(maxMem) : 0,
-                                          zebra: i % 2 == 1, onQuit: { viewModel.quit(proc) })
+                                          zebra: i % 2 == 1, onQuit: { viewModel.quit(proc) }, isQuitting: viewModel.quittingPIDs.contains(proc.id))
                         }
                     } header: {
                         HStack(spacing: 12) {
@@ -305,6 +337,9 @@ private struct AllProcessRow: View {
     let memFraction: Double
     let zebra: Bool
     let onQuit: () -> Void
+    /// True while this process's quit is in flight — the row shows a spinner so the click has an
+    /// immediate, local effect rather than looking ignored.
+    var isQuitting: Bool = false
     @State private var hovering = false
 
     var body: some View {
@@ -339,7 +374,9 @@ private struct AllProcessRow: View {
             .frame(width: 150, alignment: .trailing)
 
             Group {
-                if !process.isSystemProcess {
+                if isQuitting {
+                    ProgressView().controlSize(.small)
+                } else if !process.isSystemProcess {
                     Button("Quit") { onQuit() }
                         .buttonStyle(.plain).font(.system(size: 10.5, weight: .bold)).foregroundColor(Theme.moduleColor(.uninstaller))
                         .opacity(hovering ? 1 : 0.55)
@@ -363,6 +400,8 @@ private struct ProcessRow: View {
     /// making you compare raw numbers row by row, matching CleanMyMac's compact list style.
     let memoryFraction: Double
     let onQuit: () -> Void
+    /// True while this process's quit is in flight — shows a spinner in place of the button.
+    var isQuitting: Bool = false
     @State private var showConfirm = false
 
     var body: some View {
@@ -400,7 +439,9 @@ private struct ProcessRow: View {
                 .foregroundColor(.secondary)
                 .frame(width: 70, alignment: .trailing)
 
-            if canQuit {
+            if isQuitting {
+                ProgressView().controlSize(.small).frame(width: 38)
+            } else if canQuit {
                 Button {
                     showConfirm = true
                 } label: {

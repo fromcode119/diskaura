@@ -4,6 +4,10 @@ import AppKit
 struct ProcessSnapshot: Identifiable, Equatable {
     let id: Int32 // pid
     let name: String
+    /// Full path to the running executable. Used to find the owning `.app` bundle when the
+    /// process is a helper (Docker.app owns com.docker.backend), since quitting the bundle is
+    /// the only thing that stops a helper launchd would otherwise respawn.
+    var executablePath: String = ""
     var cpuPercent: Double
     var memoryBytes: UInt64
     var diskReadBytesPerSec: UInt64

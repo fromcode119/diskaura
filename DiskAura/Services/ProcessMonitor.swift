@@ -90,10 +90,18 @@ actor ProcessMonitor {
             let readPerSec = UInt64(Double(deltaRead) / elapsed)
             let writePerSec = UInt64(Double(deltaWrite) / elapsed)
 
+            // Executable path — lets the quit action find the owning .app bundle for a helper
+            // process (e.g. Docker.app for com.docker.backend), which is the only thing that
+            // actually stops a launchd-respawned helper.
+            var pathBuffer = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
+            let pathLength = proc_pidpath(pid, &pathBuffer, UInt32(pathBuffer.count))
+            let executablePath = pathLength > 0 ? String(cString: pathBuffer) : ""
+
             let app = appsByPID[pid]
             results.append(ProcessSnapshot(
                 id: pid,
                 name: app?.localizedName ?? name,
+                executablePath: executablePath,
                 cpuPercent: max(cpuPercent, 0),
                 memoryBytes: hasTaskInfo ? UInt64(taskInfo.pti_resident_size) : 0,
                 diskReadBytesPerSec: readPerSec,

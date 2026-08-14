@@ -41,6 +41,13 @@ final class ProcessViewModel: ObservableObject {
     @Published var searchText = ""
     @Published var isRunning = false
     @Published var quitError: String?
+    /// Set when a polite quit was ignored — drives the alert's "Force Quit" escalation.
+    @Published var forceQuitTarget: (pid: Int32, name: String)?
+    /// Live status while a quit is in flight ("Quitting Docker… 6s"). A quit can legitimately take
+    /// 20s, and with no indication that reads as a dead button.
+    @Published private(set) var busyMessage: String?
+    /// PIDs currently being quit — the row shows a spinner instead of an inert Quit button.
+    @Published private(set) var quittingPIDs: Set<Int32> = []
 
     /// When paused, the live sampler keeps running for the sparkline but the process LISTS
     /// stop updating — the user asked to freeze the "constantly changing" view so they can
@@ -127,14 +134,125 @@ final class ProcessViewModel: ObservableObject {
     /// let you kill core system daemons either, only hung user apps.
     func quit(_ process: ProcessSnapshot) {
         guard !process.isSystemProcess else { return }
-        if let app = NSRunningApplication(processIdentifier: process.id) {
-            app.terminate()
+        // Ask politely first: the owning .app bundle if there is one (Docker.app owns
+        // com.docker.backend), otherwise the process itself, otherwise SIGTERM.
+        let target = owningApp(of: process) ?? NSRunningApplication(processIdentifier: process.id)
+        let targetPID = target?.processIdentifier ?? process.id
+        let label = target?.localizedName ?? process.name
+
+        // Feedback FIRST — before any waiting — so the click always visibly does something.
+        busyMessage = "Quitting \(label)…"
+        quittingPIDs.insert(process.id)
+
+        if let target, target.terminate() {
+            // A polite quit is a REQUEST — an app can defer or ignore it (Docker Desktop takes
+            // 10-20s to stop its VM, and may not respond at all). So watch the outcome instead
+            // of assuming, and offer to force it if the app never goes away.
+            watchQuit(pid: targetPID, name: label, startedAt: startTime(of: targetPID), politeQuit: true)
+        } else if kill(targetPID, SIGTERM) == 0 {
+            watchQuit(pid: targetPID, name: label, startedAt: startTime(of: targetPID), politeQuit: false)
         } else {
-            if kill(process.id, SIGTERM) != 0 {
-                quitError = "Couldn't quit \(process.name)"
-            }
+            finishQuit(pid: process.id)
+            busyMessage = nil
+            quitError = quitFailureReason(for: process, errno: errno)
         }
         tick()
+    }
+
+    /// Force-quit (SIGKILL) — what the alert's "Force Quit" button runs after a polite quit was
+    /// ignored. Same escalation Activity Monitor offers; unsaved work in that app is lost.
+    /// Takes the target as a PARAMETER, not from `forceQuitTarget`: dismissing the alert clears
+    /// that property before the button's action runs, so reading it here made Force Quit a silent
+    /// no-op — the "I clicked force and nothing happened" bug.
+    func forceQuit(pid: Int32, name: String) {
+        forceQuitTarget = nil
+        busyMessage = "Force quitting \(name)…"
+        // forceTerminate() is still a cooperative AppKit path; SIGKILL is the kernel-level stop
+        // that an app cannot ignore. Try the former, then escalate for real.
+        NSRunningApplication(processIdentifier: pid)?.forceTerminate()
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self else { return }
+            if kill(pid, 0) == 0 { kill(pid, SIGKILL) }              // still alive → kernel kill
+            try? await Task.sleep(for: .seconds(1))
+            self.busyMessage = nil
+            if kill(pid, 0) == 0 {
+                self.quitError = "\(name) could not be stopped even with Force Quit. "
+                    + "It's likely restarted by a background service — stop it from the app's own "
+                    + "menu-bar icon or Settings."
+            }
+            self.tick()
+        }
+    }
+
+    /// Polls a quit target instead of guessing. Distinguishes the three real outcomes: it quit,
+    /// it ignored us (same pid, same start time — offer Force Quit), or it genuinely respawned
+    /// (a NEW pid for the same name). The old code claimed "restarted automatically" for all of
+    /// them, which was wrong: Docker's pid had been alive for 1d21h and never died at all.
+    private func watchQuit(pid: Int32, name: String, startedAt: UInt64, politeQuit: Bool) {
+        Task { [weak self] in
+            // Apps that stop VMs/containers legitimately need time; poll rather than one snap check,
+            // counting up so the user can see it working instead of staring at a frozen button.
+            for elapsed in 1...20 {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self else { return }
+                if kill(pid, 0) != 0 || startTime(of: pid) != startedAt {
+                    self.finishQuit(pid: pid)
+                    self.busyMessage = "\(name) quit."
+                    Task { try? await Task.sleep(for: .seconds(2)); self.busyMessage = nil }
+                    self.tick()
+                    return
+                }
+                self.busyMessage = "Quitting \(name)… \(elapsed)s"
+            }
+            guard let self else { return }
+            self.finishQuit(pid: pid)
+            self.busyMessage = nil
+            self.forceQuitTarget = (pid: pid, name: name)
+            self.quitError = politeQuit
+                ? "\(name) didn't respond to the quit request after 20 seconds. "
+                + "You can force it to stop, but any unsaved work in it will be lost."
+                : "\(name) ignored the stop signal after 20 seconds. It can be forced to stop."
+        }
+    }
+
+    private func finishQuit(pid: Int32) { quittingPIDs.remove(pid) }
+
+    /// Process start time, used to tell "never died" apart from "died and respawned" — a reused
+    /// pid would otherwise look like the original process still running.
+    private func startTime(of pid: Int32) -> UInt64 {
+        var info = proc_bsdinfo()
+        let size = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdinfo>.size))
+        guard size == Int32(MemoryLayout<proc_bsdinfo>.size) else { return 0 }
+        return UInt64(info.pbi_start_tvsec)
+    }
+
+    /// The running `.app` that owns this process, found by walking the executable path up to the
+    /// enclosing `.app` bundle. Returns nil for a standalone binary with no owning bundle.
+    private func owningApp(of process: ProcessSnapshot) -> NSRunningApplication? {
+        guard !process.executablePath.isEmpty else { return nil }
+        var url = URL(fileURLWithPath: process.executablePath)
+        while url.pathComponents.count > 1 {
+            if url.pathExtension == "app" {
+                return NSWorkspace.shared.runningApplications.first { $0.bundleURL == url }
+            }
+            url = url.deletingLastPathComponent()
+        }
+        return nil
+    }
+
+    /// Explains WHY a quit failed instead of the useless "Couldn't quit X" — the reason decides
+    /// what the user can do about it (relaunch-on-exit vs needs-admin vs already-gone).
+    private func quitFailureReason(for process: ProcessSnapshot, errno code: Int32) -> String {
+        switch code {
+        case EPERM:
+            return "\(process.name) is protected by macOS and can't be quit from here. "
+                 + "Quit it from its own app or menu-bar icon instead."
+        case ESRCH:
+            return "\(process.name) already exited."
+        default:
+            return "Couldn't quit \(process.name) (error \(code))."
+        }
     }
 
     /// Sampling runs off the main actor — this is what fixed the slow tab-switch: the
