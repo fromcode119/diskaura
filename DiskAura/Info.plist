@@ -24,6 +24,8 @@
 	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>DiskAura needs permission to control Finder to empty the Trash, and to quit apps you select in Processes.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 Fromcode 119</string>
 </dict>

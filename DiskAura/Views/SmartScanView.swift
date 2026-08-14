@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Smart Scan — the dashboard landing. A big disk-usage ring hero + circular live stats, then a
 /// one-tap scan that aggregates system junk + browser caches + Trash into routed findings.
@@ -29,6 +30,17 @@ struct SmartScanView: View {
             }
         }
         .onAppear { viewModel.loadStats() }
+        // Empty Trash can be denied (Automation permission) — report it rather than failing silently.
+        .alert("Couldn't Empty Trash", isPresented: Binding(
+            get: { viewModel.trashError != nil }, set: { if !$0 { viewModel.trashError = nil } }
+        )) {
+            Button("Open Settings") {
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.trashError ?? "")
+        }
     }
 
     private var header: some View {

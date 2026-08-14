@@ -60,6 +60,15 @@ struct CleanupView: View {
         // one; only pick default selections here.
         .onAppear { viewModel.applyDefaultSelection() }
         .onChange(of: junkStore.categories.count) { _, _ in viewModel.applyDefaultSelection() }
+        // Empty Trash can fail (Automation permission) — say so instead of implying it worked.
+        .alert("Couldn't Empty Trash", isPresented: Binding(
+            get: { viewModel.trashError != nil }, set: { if !$0 { viewModel.trashError = nil } }
+        )) {
+            Button("Open Settings") { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!) }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.trashError ?? "")
+        }
     }
 
     private static let donutPalette: [Color] = [

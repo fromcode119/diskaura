@@ -15,6 +15,9 @@ final class SmartScanViewModel: ObservableObject {
     @Published private(set) var memUsedBytes: Int64 = 0
     @Published private(set) var memUsedFraction: Double = 0
     @Published private(set) var trashBytes: Int64 = 0
+    /// Real outcome of Empty Trash — reported instead of assumed.
+    @Published var trashMessage: String?
+    @Published var trashError: String?
 
     var reclaimableBytes: Int64 { findings.reduce(0) { $0 + $1.bytes } }
     var diskUsedFraction: Double { diskTotal > 0 ? Double(diskUsed) / Double(diskTotal) : 0 }
@@ -23,7 +26,14 @@ final class SmartScanViewModel: ObservableObject {
     /// until it's emptied, so this is how the free-space number actually moves.
     func emptyTrash() {
         Task {
-            await Task.detached(priority: .userInitiated) { TrashService.empty() }.value
+            do {
+                let freed = try await Task.detached(priority: .userInitiated) { try TrashService.empty() }.value
+                trashMessage = freed > 0 ? "Emptied the Trash — reclaimed \(freed.formattedBytes)."
+                                         : "The Trash was already empty."
+            } catch {
+                // Surface the reason (usually Automation permission) instead of doing nothing quietly.
+                trashError = error.localizedDescription
+            }
             VolumeStatsStore.shared.refresh()
             loadStats()
         }

@@ -14,6 +14,10 @@ final class CleanupViewModel: ObservableObject {
     @Published var lastCleanResult: CleanResult?
     @Published var isDeletingSnapshots = false
     @Published var snapshotMessage: String?
+    /// Real outcome of an Empty Trash attempt — success detail and failure reason are both shown
+    /// rather than assuming it worked.
+    @Published var trashMessage: String?
+    @Published var trashError: String?
     private var didInitSelection = false
 
     // Data mirrored from the shared store (the View also observes the store so it re-renders).
@@ -86,14 +90,18 @@ final class CleanupViewModel: ObservableObject {
 
         isCleaning = true
         Task {
-            let outcome = await Task.detached(priority: .userInitiated) { () -> TrashMover.Outcome in
+            let result = await Task.detached(priority: .userInitiated) { () -> (TrashMover.Outcome, String?) in
                 let o = TrashMover.move(items)
-                if emptyTrash { TrashService.empty() }
-                return o
+                guard emptyTrash else { return (o, nil) }
+                // Report a failed empty instead of silently reporting the Trash as emptied.
+                do { _ = try TrashService.empty(); return (o, nil) }
+                catch { return (o, error.localizedDescription) }
             }.value
+            let outcome = result.0
             self.isCleaning = false
+            if let failure = result.1 { self.trashError = failure }
             self.lastCleanResult = CleanResult(movedCount: outcome.movedCount, freedBytes: outcome.freedBytes,
-                                               emptiedTrash: emptyTrash, restorePairs: outcome.restorePairs)
+                                               emptiedTrash: emptyTrash && result.1 == nil, restorePairs: outcome.restorePairs)
             UndoHistoryStore.shared.recordTrash(
                 title: "Cleaned \(outcome.movedCount) item\(outcome.movedCount == 1 ? "" : "s") (\(outcome.freedBytes.formattedBytes))",
                 restorePairs: outcome.restorePairs)
@@ -110,11 +118,19 @@ final class CleanupViewModel: ObservableObject {
     /// cleanup moves to Trash (recoverable), so free space only rises once the Trash is emptied.
     func emptyTrashToReclaim() {
         Task {
-            await Task.detached(priority: .userInitiated) { TrashService.empty() }.value
-            if var r = self.lastCleanResult {
-                r = CleanResult(movedCount: r.movedCount, freedBytes: r.freedBytes,
-                                emptiedTrash: true, restorePairs: r.restorePairs)
-                self.lastCleanResult = r
+            do {
+                // Only claim it was emptied if it ACTUALLY was. A denied Apple Event used to be
+                // swallowed here, so the UI reported success over a still-full Trash.
+                let freed = try await Task.detached(priority: .userInitiated) { try TrashService.empty() }.value
+                if var r = self.lastCleanResult {
+                    r = CleanResult(movedCount: r.movedCount, freedBytes: r.freedBytes,
+                                    emptiedTrash: true, restorePairs: r.restorePairs)
+                    self.lastCleanResult = r
+                }
+                self.trashMessage = freed > 0 ? "Emptied the Trash — reclaimed \(freed.formattedBytes)."
+                                              : "The Trash was already empty."
+            } catch {
+                self.trashError = error.localizedDescription
             }
             VolumeStatsStore.shared.refresh()
         }
