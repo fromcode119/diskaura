@@ -123,7 +123,7 @@ struct FanThermalView: View {
                         Text(String(format: "%.0f%%", p.cpuPercent))
                             .font(.system(size: 12, weight: .semibold, design: .monospaced))
                             .foregroundColor(p.cpuPercent > 50 ? Theme.moduleColor(.shredder) : .secondary)
-                        Button("Quit") { processVM.quit(p) }
+                        Group { if processVM.quittingPIDs.contains(p.id) { ProgressView().controlSize(.small) } else { Button("Quit") { processVM.quit(p) } } }
                             .buttonStyle(.bordered).controlSize(.small)
                     }
                     .padding(.vertical, 4)

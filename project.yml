@@ -38,6 +38,11 @@ targets:
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: "Copyright © 2026 Fromcode 119"
         LSApplicationCategoryType: public.app-category.utilities
+        # REQUIRED for Empty Trash (Finder AppleEvent) and for quitting another app
+        # (NSRunningApplication.terminate() sends a quit AppleEvent). Without this key macOS
+        # denies every Apple Event silently — Empty Trash reported success while deleting
+        # nothing, and Quit never reached the target app.
+        NSAppleEventsUsageDescription: "DiskAura needs permission to control Finder to empty the Trash, and to quit apps you select in Processes."
     entitlements:
       path: DiskAura/DiskAura.entitlements
       properties:

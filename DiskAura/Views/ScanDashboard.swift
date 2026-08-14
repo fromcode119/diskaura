@@ -13,6 +13,7 @@ struct ScanDashboard: View {
     @State private var trashBytes: Int64 = 0
     @State private var trashItems = 0
     @State private var confirmEmpty = false
+    @State private var trashError: String?
 
     private var palette: [Color] {
         [Theme.moduleColor(.scan), Theme.moduleColor(.processes), Theme.moduleColor(.largeOldFiles),
@@ -49,11 +50,21 @@ struct ScanDashboard: View {
         .alert("Empty Trash?", isPresented: $confirmEmpty) {
             Button("Cancel", role: .cancel) {}
             Button("Empty Trash", role: .destructive) {
-                TrashService.empty()
+                // Report what actually happened — a denied Apple Event used to leave the Trash
+                // full while the UI moved on as though it had worked.
+                do { _ = try TrashService.empty() }
+                catch { trashError = error.localizedDescription }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1) { refreshTrash() }
             }
         } message: {
             Text("This permanently deletes \(trashItems) item(s) in Trash (\(trashBytes.formattedBytes)).")
+        }
+        .alert("Couldn't Empty Trash", isPresented: Binding(
+            get: { trashError != nil }, set: { if !$0 { trashError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(trashError ?? "")
         }
     }
 
