@@ -27,9 +27,8 @@ final class SmartScanViewModel: ObservableObject {
     func emptyTrash() {
         Task {
             do {
-                let freed = try await Task.detached(priority: .userInitiated) { try TrashService.empty() }.value
-                trashMessage = freed > 0 ? "Emptied the Trash — reclaimed \(freed.formattedBytes)."
-                                         : "The Trash was already empty."
+                let out = try await Task.detached(priority: .userInitiated) { try TrashService.empty() }.value
+                trashMessage = CleanupViewModel.emptyOutcomeMessage(out)
             } catch {
                 // Surface the reason (usually Automation permission) instead of doing nothing quietly.
                 trashError = error.localizedDescription
