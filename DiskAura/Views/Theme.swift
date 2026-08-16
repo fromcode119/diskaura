@@ -60,6 +60,7 @@ enum Theme {
         case .maintenance: return Color(red: 0.36, green: 0.80, blue: 0.72)
         case .shredder: return Color(red: 1.00, green: 0.50, blue: 0.30)
         case .fanThermal: return Color(red: 0.30, green: 0.74, blue: 0.86)
+        case .homebrew: return Color(red: 0.96, green: 0.70, blue: 0.28)
         case .settings: return Color(red: 0.58, green: 0.60, blue: 0.66)
         }
     }
