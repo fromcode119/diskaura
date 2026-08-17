@@ -4,13 +4,14 @@ import Foundation
 /// streamed log — a multi-minute wait with no output reads as a frozen app.
 struct BrewOperation: Identifiable {
     enum Kind: String {
-        case install, uninstall, upgrade, cleanup
+        case install, uninstall, upgrade, cleanup, autoremove
         var verb: String {
             switch self {
             case .install: return "Installing"
             case .uninstall: return "Uninstalling"
             case .upgrade: return "Upgrading"
             case .cleanup: return "Cleaning up"
+            case .autoremove: return "Removing orphaned dependencies"
             }
         }
     }

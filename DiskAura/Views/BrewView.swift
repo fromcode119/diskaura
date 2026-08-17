@@ -30,6 +30,13 @@ struct BrewView: View {
             if viewModel.pendingUninstall?.dependents.isEmpty == false {
                 Button("OK", role: .cancel) {}
             } else {
+                // Offered only when the cask actually declares a zap stanza — otherwise the option
+                // would promise cleanup it can't perform.
+                if viewModel.pendingUninstall?.zapPaths.isEmpty == false {
+                    Button("Remove + all traces", role: .destructive) {
+                        viewModel.confirmUninstall(removeTraces: true)
+                    }
+                }
                 Button("Remove", role: .destructive) { viewModel.confirmUninstall() }
                 Button("Cancel", role: .cancel) {}
             }
@@ -57,8 +64,15 @@ struct BrewView: View {
                  + "Remove those first."
         }
         let size = pending.package.sizeBytes
-        return "Homebrew deletes immediately — there's no Trash step, so this can't be undone from "
-             + "here.\n\nFrees about \(size > 0 ? size.formattedBytes : "an unknown amount")."
+        var msg = "Homebrew deletes immediately — there's no Trash step, so this can't be undone "
+                + "from here.\n\nFrees about \(size > 0 ? size.formattedBytes : "an unknown amount")."
+        if !pending.zapPaths.isEmpty {
+            // Name the exact extra paths — "all traces" should never be a blind promise.
+            msg += "\n\n\u{201C}Remove + all traces\u{201D} also deletes: "
+                 + pending.zapPaths.prefix(6).joined(separator: ", ")
+                 + (pending.zapPaths.count > 6 ? " and \(pending.zapPaths.count - 6) more." : ".")
+        }
+        return msg
     }
 
     // MARK: - Header
@@ -135,6 +149,7 @@ struct BrewView: View {
                         if !viewModel.availableMatches.isEmpty { availableMatchesSection }
                         if !viewModel.hasAnyMatches && !viewModel.isSearching { noMatchesCard }
                     } else {
+                        if !viewModel.orphanedDependencies.isEmpty { orphansCard }
                         if !viewModel.outdated.isEmpty { outdatedSection }
                         installedSection
                     }
@@ -179,6 +194,31 @@ struct BrewView: View {
                                onInstall: { viewModel.install(pkg) })
             }
         }
+    }
+
+    /// Removing a formula can leave its dependencies behind with nothing using them. Surfaced as an
+    /// explicit follow-up — the app doesn't delete extra packages on its own initiative.
+    private var orphansCard: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 9).fill(accent.opacity(0.18)).frame(width: 34, height: 34)
+                Image(systemName: "leaf.arrow.triangle.circlepath").font(.system(size: 14)).foregroundColor(accent)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(viewModel.orphanedDependencies.count) leftover dependenc\(viewModel.orphanedDependencies.count == 1 ? "y" : "ies")")
+                    .font(.system(size: 13, weight: .semibold))
+                Text(viewModel.orphanedDependencies.prefix(5).joined(separator: ", ")
+                     + (viewModel.orphanedDependencies.count > 5 ? "…" : "")
+                     + " — installed for something you removed, now unused.")
+                    .font(.system(size: 11)).foregroundColor(.secondary).lineLimit(2)
+            }
+            Spacer()
+            Button("Remove them") { viewModel.removeOrphans() }
+                .buttonStyle(.softPill(accent))
+                .disabled(viewModel.operation?.isRunning == true)
+        }
+        .padding(.horizontal, Theme.Spacing.md).padding(.vertical, 10)
+        .glassCard()
     }
 
     private var noMatchesCard: some View {

@@ -181,3 +181,35 @@ final class BrewSearchTests: XCTestCase {
         XCTAssertFalse(vm.hasSearchQuery)
     }
 }
+
+/// Trace removal: zap for casks, autoremove for orphaned formula dependencies.
+final class BrewTraceRemovalTests: XCTestCase {
+    private let env = BrewEnvironment(binaryPath: "/opt/homebrew/bin/brew", prefix: "/opt/homebrew")
+
+    func testZapFlagOnlyForCasksAndOnlyWhenRequested() {
+        let cask = BrewPackage(name: "codex", kind: .cask)
+        XCTAssertTrue(BrewService.uninstallArguments(cask, zap: true).contains("--zap"))
+        XCTAssertFalse(BrewService.uninstallArguments(cask, zap: false).contains("--zap"))
+        // Formulae have no zap concept — the flag must never be sent for them.
+        let formula = BrewPackage(name: "wget", kind: .formula)
+        XCTAssertFalse(BrewService.uninstallArguments(formula, zap: true).contains("--zap"))
+    }
+
+    func testAutoremovePreviewNeverRemoves() throws {
+        let runner = FakeBrewRunner()
+        runner.stdout = "==> Would autoremove 2 unneeded formulae:\nlibidn2\nlibunistring\n"
+        let svc = BrewService(runner: runner, environment: env)
+        XCTAssertEqual(try svc.orphanedDependencies(), ["libidn2", "libunistring"])
+        XCTAssertEqual(runner.receivedArgs.first, ["autoremove", "-n"])
+        XCTAssertFalse(runner.receivedArgs.contains(["autoremove"]))
+    }
+
+    func testAutoremoveParsesSpaceSeparatedList() {
+        let out = "==> Would autoremove 3 unneeded formulae:\nlibidn2 libunistring gettext\n"
+        XCTAssertEqual(BrewService.parseAutoremove(out), ["libidn2", "libunistring", "gettext"])
+    }
+
+    func testNoOrphansParsesEmpty() {
+        XCTAssertTrue(BrewService.parseAutoremove("").isEmpty)
+    }
+}

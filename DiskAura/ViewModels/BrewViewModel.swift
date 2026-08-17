@@ -20,8 +20,11 @@ final class BrewViewModel: ObservableObject {
     @Published private(set) var isSearching = false
     @Published var errorMessage: String?
     /// Pending confirmation — a destructive action always previews before it runs.
-    @Published var pendingUninstall: (package: BrewPackage, preview: BrewPreview, dependents: [String])?
+    @Published var pendingUninstall: (package: BrewPackage, preview: BrewPreview, dependents: [String], zapPaths: [String])?
     @Published var cleanupPreview: BrewPreview?
+    /// Dependencies left orphaned by a removal — offered as an explicit follow-up.
+    @Published var orphanedDependencies: [String] = []
+    private var cleanupOrphansAfterUninstall = false
 
     private let catalog = BrewCatalog()
 
@@ -48,12 +51,17 @@ final class BrewViewModel: ObservableObject {
     /// Cellar/Caskroom (~2.6GB of directories) and is slow. Doing both before showing anything left
     /// the tab blank with no explanation, so phase 1 publishes the list immediately and phase 2
     /// fills sizes in behind it.
-    func load() {
+    func load() { Task { await reload() } }
+
+    /// Awaitable so callers that must act on FRESH state (post-operation refresh) can sequence
+    /// correctly instead of racing the load and reading stale packages.
+    func reload() async {
         environment = BrewEnvironment.locate()
         guard let service = makeService() else { return }
         isLoading = true
         loadingStage = "Reading installed packages…"
-        Task {
+        do {
+            defer { isLoading = false }
             let parsed = await Task.detached(priority: .userInitiated) {
                 (try? service.installedPackages()) ?? []
             }.value
@@ -124,20 +132,40 @@ final class BrewViewModel: ObservableObject {
     func requestUninstall(_ pkg: BrewPackage) {
         guard let service = makeService() else { return }
         Task {
-            let (preview, dependents) = await Task.detached { () -> (BrewPreview, [String]) in
+            let (preview, dependents, zap) = await Task.detached { () -> (BrewPreview, [String], [String]) in
                 let p = (try? service.previewUninstall(pkg)) ?? BrewPreview(lines: [], reclaimableBytes: 0)
                 let d = (try? service.dependents(of: pkg.name)) ?? []
-                return (p, d)
+                // Show the exact extra paths rather than an opaque "remove all traces".
+                let z = service.zapPaths(for: pkg)
+                return (p, d, z)
             }.value
-            self.pendingUninstall = (pkg, preview, dependents)
+            self.pendingUninstall = (pkg, preview, dependents, zap)
         }
     }
 
-    func confirmUninstall() {
+    /// `zap` also deletes the cask's leftover config/support files. Formulae ignore it; their
+    /// leftovers are orphaned dependencies, offered separately after the removal.
+    func confirmUninstall(removeTraces: Bool = false) {
         guard let pending = pendingUninstall else { return }
         pendingUninstall = nil
+        cleanupOrphansAfterUninstall = removeTraces
         run(.uninstall, target: pending.package.name,
-            args: BrewService.uninstallArguments(pending.package))
+            args: BrewService.uninstallArguments(pending.package, zap: removeTraces))
+    }
+
+    /// After a formula is removed, its dependencies can be left behind with nothing using them.
+    /// Surfaced as an explicit follow-up rather than removed silently.
+    func checkForOrphans() {
+        guard let service = makeService() else { return }
+        Task {
+            let orphans = await Task.detached { (try? service.orphanedDependencies()) ?? [] }.value
+            self.orphanedDependencies = orphans
+        }
+    }
+
+    func removeOrphans() {
+        orphanedDependencies = []
+        run(.autoremove, target: "", args: BrewService.autoremoveArguments(dryRun: false))
     }
 
     func requestCleanup() {
@@ -181,7 +209,14 @@ final class BrewViewModel: ObservableObject {
                 let reason = (result?.stderr).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) } ?? ""
                 self.operation?.state = .failed(reason.isEmpty ? "\(kind.verb) failed." : reason)
             }
-            self.load()   // re-read real state rather than assuming the outcome
+            // Re-read real state rather than assuming the outcome — and AWAIT it, so the search
+            // refresh below sees fresh packages. Without this the search sections kept their
+            // pre-operation snapshot, so a just-removed package still offered "Remove" and brew
+            // replied "not installed".
+            await self.reload()
+            if self.hasSearchQuery { self.runSearch() }
+            // A formula removal can orphan its dependencies; check once the state is current.
+            if kind == .uninstall { self.checkForOrphans() }
         }
     }
 
@@ -191,6 +226,7 @@ final class BrewViewModel: ObservableObject {
         case .uninstall: return "Uninstalled \(target)."
         case .upgrade: return target.isEmpty ? "Upgraded all packages." : "Upgraded \(target)."
         case .cleanup: return "Cleanup finished."
+        case .autoremove: return "Removed orphaned dependencies."
         }
     }
 

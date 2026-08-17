@@ -21,12 +21,24 @@ struct BrewService {
     static func installArguments(_ pkg: BrewPackage) -> [String] {
         pkg.kind == .cask ? ["install", "--cask", pkg.name] : ["install", pkg.name]
     }
-    static func uninstallArguments(_ pkg: BrewPackage, dryRun: Bool = false) -> [String] {
+    /// `zap` additionally removes a cask's leftover config/support/cache files, as declared by the
+    /// cask's own zap stanza. Formulae have no zap concept — brew ignores the flag for them, so it
+    /// is only ever added for casks.
+    static func uninstallArguments(_ pkg: BrewPackage, dryRun: Bool = false, zap: Bool = false) -> [String] {
         var args = ["uninstall"]
-        if pkg.kind == .cask { args.append("--cask") }
+        if pkg.kind == .cask {
+            args.append("--cask")
+            if zap { args.append("--zap") }
+        }
         if dryRun { args.append("--dry-run") }
         args.append(pkg.name)
         return args
+    }
+
+    /// Removes dependencies that were installed only to satisfy something now uninstalled. Without
+    /// this, removing one formula silently leaves its dependency tree on disk.
+    static func autoremoveArguments(dryRun: Bool) -> [String] {
+        dryRun ? ["autoremove", "-n"] : ["autoremove"]
     }
     static func upgradeArguments(_ pkg: BrewPackage?) -> [String] {
         guard let pkg else { return ["upgrade"] }
@@ -134,6 +146,56 @@ struct BrewService {
         default: multiplier = 1
         }
         return Int64(value * multiplier)
+    }
+
+    // MARK: - Leftovers / traces
+
+    /// Dependencies now orphaned — installed only for something that's gone. Parsed from
+    /// `autoremove -n`, so nothing is removed by asking.
+    func orphanedDependencies() throws -> [String] {
+        let result = try runner.run(Self.autoremoveArguments(dryRun: true))
+        guard result.succeeded else { return [] }
+        return Self.parseAutoremove(result.stdout + "\n" + result.stderr)
+    }
+
+    /// brew prints "==> Would autoremove N unneeded formulae:" then the names.
+    static func parseAutoremove(_ text: String) -> [String] {
+        var names: [String] = []
+        var collecting = false
+        for raw in text.split(whereSeparator: \.isNewline) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("==>") { collecting = line.lowercased().contains("autoremove"); continue }
+            guard collecting, !line.isEmpty else { continue }
+            // The list can be space-separated on one line or one per line.
+            names.append(contentsOf: line.split(separator: " ").map(String.init))
+        }
+        return names.filter { !$0.isEmpty }
+    }
+
+    /// The extra paths a cask's zap stanza would delete, so the confirmation can SHOW them rather
+    /// than asking the user to trust an opaque "remove all traces".
+    func zapPaths(for pkg: BrewPackage) -> [String] {
+        guard pkg.kind == .cask,
+              let result = try? runner.run(["info", "--json=v2", "--cask", pkg.name]),
+              result.succeeded,
+              let data = result.stdout.data(using: .utf8),
+              let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let cask = (root["casks"] as? [[String: Any]])?.first,
+              let artifacts = cask["artifacts"] as? [[String: Any]]
+        else { return [] }
+
+        var paths: [String] = []
+        for artifact in artifacts {
+            guard let zap = artifact["zap"] as? [[String: Any]] ?? (artifact["zap"] as? [String: Any]).map({ [$0] })
+            else { continue }
+            for entry in zap {
+                for (_, value) in entry {
+                    if let s = value as? String { paths.append(s) }
+                    else if let list = value as? [String] { paths.append(contentsOf: list) }
+                }
+            }
+        }
+        return paths
     }
 
     // MARK: - Sizes
