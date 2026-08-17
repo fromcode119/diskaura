@@ -53,8 +53,9 @@ struct BrewPackageRow: View {
     @ViewBuilder private var actions: some View {
         HStack(spacing: 6) {
             if package.isOutdated, let onUpgrade {
+                // Row actions are compact, but all three share one sizing system so they line up.
                 Button("Upgrade") { onUpgrade() }
-                    .buttonStyle(.bordered).controlSize(.small).disabled(isBusy)
+                    .buttonStyle(.compactPill(Theme.moduleColor(.largeOldFiles))).disabled(isBusy)
             }
             if package.isInstalled, let onUninstall {
                 Button("Remove") { onUninstall() }
@@ -66,7 +67,7 @@ struct BrewPackageRow: View {
             }
             if !package.isInstalled, let onInstall {
                 Button("Install") { onInstall() }
-                    .buttonStyle(.pill(accent)).controlSize(.small).disabled(isBusy)
+                    .buttonStyle(.compactPill(accent, filled: true)).disabled(isBusy)
             }
         }
         .frame(minWidth: 90, alignment: .trailing)

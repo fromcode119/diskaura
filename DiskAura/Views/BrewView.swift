@@ -68,27 +68,39 @@ struct BrewView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Homebrew").font(Theme.TypeScale.title)
-                    Text(viewModel.isLoading
-                         ? "Reading installed packages…"
-                         : "\(viewModel.packages.count) installed · \(viewModel.totalBytes.formattedBytes) · \(viewModel.outdated.count) outdated")
-                        .font(.system(size: 11)).foregroundColor(.secondary)
+                    HStack(spacing: 6) {
+                        Text(subtitle).font(.system(size: 11)).foregroundColor(.secondary)
+                        // Sizes arrive after the list; say so rather than showing a silent 0 B.
+                        if viewModel.isMeasuring { ProgressView().controlSize(.small).scaleEffect(0.7) }
+                    }
                 }
                 Spacer()
-                if viewModel.isLoading { ProgressView().controlSize(.small) }
+                // Both actions use the pill family so they share font, padding and height.
                 Button { viewModel.requestCleanup() } label: { Label("Clean up", systemImage: "sparkles") }
-                    .buttonStyle(.bordered).controlSize(.small)
-                    .disabled(viewModel.operation?.isRunning == true)
+                    .buttonStyle(.softPill(accent))
+                    .disabled(viewModel.operation?.isRunning == true || viewModel.isLoading)
                 if !viewModel.outdated.isEmpty {
                     Button { viewModel.upgrade(nil) } label: {
                         Label("Upgrade all \(viewModel.outdated.count)", systemImage: "arrow.up.circle.fill")
                     }
-                    .buttonStyle(.pill(accent)).controlSize(.small)
+                    .buttonStyle(.pill(accent))
                     .disabled(viewModel.operation?.isRunning == true)
                 }
             }
             searchField
         }
         .padding(Theme.Spacing.md)
+    }
+
+    /// Never reports a total while it's still being measured — a growing number that starts near
+    /// zero reads as wrong data.
+    private var subtitle: String {
+        if viewModel.isLoading { return "Reading installed packages…" }
+        var parts = ["\(viewModel.packages.count) installed"]
+        if viewModel.isMeasuring { parts.append("measuring sizes…") }
+        else if viewModel.totalBytes > 0 { parts.append(viewModel.totalBytes.formattedBytes) }
+        if !viewModel.outdated.isEmpty { parts.append("\(viewModel.outdated.count) outdated") }
+        return parts.joined(separator: " · ")
     }
 
     private var searchField: some View {
@@ -111,15 +123,32 @@ struct BrewView: View {
 
     // MARK: - Content
 
-    private var content: some View {
-        ScrollView {
-            LazyVStack(spacing: Theme.Spacing.md) {
-                if !viewModel.searchResults.isEmpty { searchSection }
-                if !viewModel.outdated.isEmpty && viewModel.searchResults.isEmpty { outdatedSection }
-                if viewModel.searchResults.isEmpty { installedSection }
+    @ViewBuilder private var content: some View {
+        if viewModel.isLoading && viewModel.packages.isEmpty {
+            loadingState
+        } else {
+            ScrollView {
+                LazyVStack(spacing: Theme.Spacing.md) {
+                    if !viewModel.searchResults.isEmpty { searchSection }
+                    if !viewModel.outdated.isEmpty && viewModel.searchResults.isEmpty { outdatedSection }
+                    if viewModel.searchResults.isEmpty { installedSection }
+                }
+                .padding(Theme.Spacing.lg)
             }
-            .padding(Theme.Spacing.lg)
         }
+    }
+
+    /// Opening the tab used to show an empty pane while brew was read — indistinguishable from
+    /// "nothing installed". State what's happening instead.
+    private var loadingState: some View {
+        VStack(spacing: 14) {
+            ProgressView().controlSize(.large)
+            Text(viewModel.loadingStage.isEmpty ? "Reading Homebrew…" : viewModel.loadingStage)
+                .font(.system(size: 13, weight: .medium))
+            Text("Asking brew what's installed and how much space it uses.")
+                .font(.system(size: 11)).foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var searchSection: some View {

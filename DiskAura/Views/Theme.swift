@@ -112,6 +112,54 @@ extension ButtonStyle where Self == PillButtonStyle {
     static func pill(_ color: Color) -> PillButtonStyle { PillButtonStyle(color: color) }
 }
 
+/// Secondary pill: tinted fill, coloured text. Uses the SAME font and padding as `PillButtonStyle`
+/// so a secondary action sits beside a primary one at identical height. `.bordered` +
+/// `.controlSize(.small)` next to a pill renders visibly smaller — they are different sizing
+/// systems, and mixing them is what made the toolbar look mismatched.
+struct SoftPillButtonStyle: ButtonStyle {
+    var color: Color = Theme.accent
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12.5, weight: .semibold))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+            .background(color.opacity(configuration.isPressed ? 0.28 : 0.16))
+            .foregroundColor(color)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(color.opacity(0.30), lineWidth: 1))
+    }
+}
+
+extension ButtonStyle where Self == SoftPillButtonStyle {
+    static var softPill: SoftPillButtonStyle { SoftPillButtonStyle() }
+    static func softPill(_ color: Color) -> SoftPillButtonStyle { SoftPillButtonStyle(color: color) }
+}
+
+/// Row-scale pill for inline actions inside list rows. One sizing system for every row button, so
+/// filled and tinted actions line up instead of stepping between system and custom control sizes.
+struct CompactPillButtonStyle: ButtonStyle {
+    var color: Color = Theme.accent
+    var filled = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 11, weight: .semibold))
+            .padding(.horizontal, 11)
+            .padding(.vertical, 5)
+            .background(filled ? color.opacity(configuration.isPressed ? 0.75 : 1) : color.opacity(configuration.isPressed ? 0.28 : 0.16))
+            .foregroundColor(filled ? .white : color)
+            .clipShape(Capsule())
+            .overlay(filled ? nil : Capsule().stroke(color.opacity(0.30), lineWidth: 1))
+    }
+}
+
+extension ButtonStyle where Self == CompactPillButtonStyle {
+    static func compactPill(_ color: Color, filled: Bool = false) -> CompactPillButtonStyle {
+        CompactPillButtonStyle(color: color, filled: filled)
+    }
+}
+
 /// Gradient-filled pill for the ONE primary action per screen (Scan) — matches the
 /// blue→violet CTA buttons in the reference apps.
 struct GradientPillButtonStyle: ButtonStyle {

@@ -8,6 +8,10 @@ final class BrewViewModel: ObservableObject {
     @Published private(set) var environment: BrewEnvironment?
     @Published private(set) var packages: [BrewPackage] = []
     @Published private(set) var isLoading = false
+    /// Sizes still being measured — the list is already usable, so this is a subtle inline hint,
+    /// not a blocking spinner.
+    @Published private(set) var isMeasuring = false
+    @Published private(set) var loadingStage = ""
     @Published private(set) var operation: BrewOperation?
     @Published var searchText = ""
     @Published private(set) var searchResults: [BrewPackage] = []
@@ -33,19 +37,34 @@ final class BrewViewModel: ObservableObject {
 
     // MARK: - Loading
 
+    /// Two-phase on purpose. Reading brew's JSON is fast; measuring every package walks the whole
+    /// Cellar/Caskroom (~2.6GB of directories) and is slow. Doing both before showing anything left
+    /// the tab blank with no explanation, so phase 1 publishes the list immediately and phase 2
+    /// fills sizes in behind it.
     func load() {
         environment = BrewEnvironment.locate()
         guard let service = makeService() else { return }
         isLoading = true
+        loadingStage = "Reading installed packages…"
         Task {
-            let loaded = await Task.detached(priority: .userInitiated) { () -> [BrewPackage] in
-                guard var pkgs = try? service.installedPackages() else { return [] }
-                // Sizes come from disk; brew has no fast size query.
+            let parsed = await Task.detached(priority: .userInitiated) {
+                (try? service.installedPackages()) ?? []
+            }.value
+            self.packages = parsed.sorted { $0.name < $1.name }
+            self.isLoading = false
+
+            guard !parsed.isEmpty else { return }
+            self.isMeasuring = true
+            self.loadingStage = "Measuring package sizes…"
+            let measured = await Task.detached(priority: .utility) { () -> [BrewPackage] in
+                var pkgs = parsed
                 for i in pkgs.indices { pkgs[i].sizeBytes = service.sizeOnDisk(pkgs[i]) }
                 return pkgs.sorted { $0.sizeBytes > $1.sizeBytes }
             }.value
-            self.packages = loaded
-            self.isLoading = false
+            self.packages = measured
+            self.isMeasuring = false
+            self.loadingStage = ""
+
             await self.catalog.loadCache()
             if await self.catalog.isStale { Task.detached { await self.catalog.refresh() } }
         }
