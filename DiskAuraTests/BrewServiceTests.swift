@@ -140,3 +140,44 @@ final class BrewServiceTests: XCTestCase {
         XCTAssertFalse(runner.receivedArgs.contains(["cleanup"]))
     }
 }
+
+/// Search must cover BOTH installed and not-installed packages. The first implementation filtered
+/// installed ones OUT, so searching for something you already had returned nothing.
+@MainActor
+final class BrewSearchTests: XCTestCase {
+    private func viewModelWithInstalled(_ names: [String]) -> BrewViewModel {
+        let vm = BrewViewModel()
+        vm.setPackagesForTesting(names.map { n in
+            var p = BrewPackage(name: n, kind: .formula)
+            p.installedVersion = "1.0"
+            return p
+        })
+        return vm
+    }
+
+    func testSearchFindsInstalledPackage() {
+        let vm = viewModelWithInstalled(["wget", "ffmpeg", "libpng"])
+        vm.searchText = "wget"
+        vm.runSearch()
+        XCTAssertEqual(vm.installedMatches.map(\.name), ["wget"])
+    }
+
+    func testSearchMatchesDescriptionAndRanksExactNameFirst() {
+        let vm = BrewViewModel()
+        var a = BrewPackage(name: "wgetpaste", kind: .formula); a.installedVersion = "1.0"
+        var b = BrewPackage(name: "wget", kind: .formula); b.installedVersion = "1.0"
+        vm.setPackagesForTesting([a, b])
+        vm.searchText = "wget"
+        vm.runSearch()
+        XCTAssertEqual(vm.installedMatches.first?.name, "wget", "exact name must rank first")
+        XCTAssertEqual(vm.installedMatches.count, 2)
+    }
+
+    func testShortQueryClearsResultsInsteadOfMatchingEverything() {
+        let vm = viewModelWithInstalled(["wget"])
+        vm.searchText = "w"
+        vm.runSearch()
+        XCTAssertTrue(vm.installedMatches.isEmpty)
+        XCTAssertFalse(vm.hasSearchQuery)
+    }
+}

@@ -106,7 +106,7 @@ struct BrewView: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundColor(.secondary)
-            TextField("Search Homebrew for something to install…", text: $viewModel.searchText)
+            TextField("Search installed packages and the Homebrew catalog…", text: $viewModel.searchText)
                 .textFieldStyle(.plain).font(.system(size: 12.5))
                 .onSubmit { viewModel.runSearch() }
                 .onChange(of: viewModel.searchText) { _, _ in viewModel.runSearch() }
@@ -129,9 +129,15 @@ struct BrewView: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: Theme.Spacing.md) {
-                    if !viewModel.searchResults.isEmpty { searchSection }
-                    if !viewModel.outdated.isEmpty && viewModel.searchResults.isEmpty { outdatedSection }
-                    if viewModel.searchResults.isEmpty { installedSection }
+                    if viewModel.hasSearchQuery {
+                        // Searching shows BOTH what you have and what you could install.
+                        if !viewModel.installedMatches.isEmpty { installedMatchesSection }
+                        if !viewModel.availableMatches.isEmpty { availableMatchesSection }
+                        if !viewModel.hasAnyMatches && !viewModel.isSearching { noMatchesCard }
+                    } else {
+                        if !viewModel.outdated.isEmpty { outdatedSection }
+                        installedSection
+                    }
                 }
                 .padding(Theme.Spacing.lg)
             }
@@ -151,14 +157,40 @@ struct BrewView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var searchSection: some View {
-        section("Search results", subtitle: "\(viewModel.searchResults.count) match\(viewModel.searchResults.count == 1 ? "" : "es")") {
-            ForEach(viewModel.searchResults) { pkg in
+    /// Matches you already have — actions are upgrade/remove, not install.
+    private var installedMatchesSection: some View {
+        section("Installed", subtitle: "\(viewModel.installedMatches.count) of your packages match") {
+            ForEach(viewModel.installedMatches) { pkg in
+                BrewPackageRow(package: pkg, accent: accent,
+                               isBusy: viewModel.operation?.isRunning == true,
+                               onUpgrade: pkg.isOutdated ? { viewModel.upgrade(pkg) } : nil,
+                               onUninstall: { viewModel.requestUninstall(pkg) })
+            }
+        }
+    }
+
+    private var availableMatchesSection: some View {
+        section("Available to install",
+                subtitle: viewModel.isSearching ? "searching the catalog…"
+                                                : "\(viewModel.availableMatches.count) match\(viewModel.availableMatches.count == 1 ? "" : "es") you don't have") {
+            ForEach(viewModel.availableMatches) { pkg in
                 BrewPackageRow(package: pkg, accent: accent,
                                isBusy: viewModel.operation?.isRunning == true,
                                onInstall: { viewModel.install(pkg) })
             }
         }
+    }
+
+    private var noMatchesCard: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").font(.system(size: 26)).foregroundColor(.secondary)
+            Text("No package matches \u{201C}\(viewModel.searchText)\u{201D}")
+                .font(.system(size: 13, weight: .medium))
+            Text("Searched your installed packages and the Homebrew catalog.")
+                .font(.system(size: 11)).foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 40)
+        .glassCard()
     }
 
     private var outdatedSection: some View {

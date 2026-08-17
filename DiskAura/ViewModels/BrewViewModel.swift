@@ -14,7 +14,9 @@ final class BrewViewModel: ObservableObject {
     @Published private(set) var loadingStage = ""
     @Published private(set) var operation: BrewOperation?
     @Published var searchText = ""
-    @Published private(set) var searchResults: [BrewPackage] = []
+    /// Search hits among installed packages (local, instant) and in the catalog (not installed).
+    @Published private(set) var installedMatches: [BrewPackage] = []
+    @Published private(set) var availableMatches: [BrewPackage] = []
     @Published private(set) var isSearching = false
     @Published var errorMessage: String?
     /// Pending confirmation — a destructive action always previews before it runs.
@@ -22,6 +24,11 @@ final class BrewViewModel: ObservableObject {
     @Published var cleanupPreview: BrewPreview?
 
     private let catalog = BrewCatalog()
+
+    #if DEBUG
+    /// Test seam: inject installed packages without shelling out to a real brew.
+    func setPackagesForTesting(_ pkgs: [BrewPackage]) { packages = pkgs }
+    #endif
 
     var isInstalled: Bool { environment != nil }
     var outdated: [BrewPackage] { packages.filter(\.isOutdated) }
@@ -72,25 +79,44 @@ final class BrewViewModel: ObservableObject {
 
     // MARK: - Search
 
+    /// Searches BOTH what's installed and what's available. Installed matches come from local data
+    /// so they appear instantly and work offline; catalog matches follow. The two are kept separate
+    /// because the useful action differs — upgrade/remove versus install.
     func runSearch() {
-        let query = searchText
-        guard query.trimmingCharacters(in: .whitespaces).count >= 2 else { searchResults = []; return }
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard query.count >= 2 else {
+            installedMatches = []; availableMatches = []; isSearching = false; return
+        }
+        let q = query.lowercased()
+
+        // Phase 1 — local, instant.
+        installedMatches = packages.filter {
+            $0.name.lowercased().contains(q) || $0.desc.lowercased().contains(q)
+        }.sorted { lhs, rhs in
+            // Exact name first, then prefix, then the rest — same intent as the catalog ranking.
+            func rank(_ p: BrewPackage) -> Int {
+                let n = p.name.lowercased()
+                return n == q ? 0 : (n.hasPrefix(q) ? 1 : (n.contains(q) ? 2 : 3))
+            }
+            return rank(lhs) == rank(rhs) ? lhs.name < rhs.name : rank(lhs) < rank(rhs)
+        }
+
+        // Phase 2 — catalog, excluding anything already installed (it's in phase 1 already).
         isSearching = true
         Task {
             var results = await catalog.search(query)
-            // Offline / never-cached fallback so search still works, just slower.
             if results.isEmpty, let service = makeService(), await !catalog.isLoaded {
+                // Never cached and offline — slower CLI path so search still returns something.
                 results = await Task.detached { BrewCatalog.cliSearch(query, service: service) }.value
             }
-            let installedNames = Set(self.packages.map(\.id))
-            self.searchResults = results.map { r in
-                var r = r
-                if let hit = self.packages.first(where: { $0.id == r.id }) { r.installedVersion = hit.installedVersion }
-                return r
-            }.filter { !$0.isInstalled || installedNames.isEmpty }
+            let installedIDs = Set(self.packages.map(\.id))
+            self.availableMatches = results.filter { !installedIDs.contains($0.id) }
             self.isSearching = false
         }
     }
+
+    var hasSearchQuery: Bool { searchText.trimmingCharacters(in: .whitespaces).count >= 2 }
+    var hasAnyMatches: Bool { !installedMatches.isEmpty || !availableMatches.isEmpty }
 
     // MARK: - Destructive actions (preview first)
 
