@@ -31,6 +31,13 @@ files anywhere. Nothing it does is a one-way door: every clean and move is recov
 - **Assistant** — ask "why is my disk full?" and get a grounded, on-device answer based on your real data.
 - **App Uninstaller** — removes apps *and* the leftovers they hide, with admin escalation for
   root-owned apps, plus a background watcher that catches leftovers when you trash an app in Finder.
+- **Homebrew** — manage packages without the terminal: everything installed with its real on-disk
+  size, one-click upgrades for outdated formulae and casks, search across both your packages and the
+  full catalog, and cleanup of stale downloads. Removals preview exactly what goes first, refuse to
+  break packages something still depends on, and can clear a cask's leftover files or sweep
+  dependencies orphaned by an uninstall.
+- **Fan & Thermal** — live fan RPM, temperature sensors, and thermal state, with a "why are my fans
+  loud" list of the processes driving it (read-only; macOS exposes no fan control on Apple Silicon).
 - **Protection** — scans for adware and suspicious launch items, and quarantines them to the Trash
   (root-owned `/Library` items via an admin-escalated move).
 - **Privacy** — clears browser caches, cookies, and history for Safari, Chrome, and Firefox, all to
@@ -49,6 +56,8 @@ names, contents, and disk facts never leave the device, and there is no telemetr
 - **macOS 14** or later to run.
 - **macOS 26 (Tahoe) on Apple Silicon** for the on-device AI features (AI Organizer, Smart Rules,
   Assistant). Everything else works without them.
+- **[Homebrew](https://brew.sh)** for the Homebrew module. DiskAura detects it and explains how to
+  get it if it's missing; it never installs Homebrew for you.
 
 ## Build from source
 

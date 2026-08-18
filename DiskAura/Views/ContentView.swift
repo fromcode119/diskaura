@@ -25,6 +25,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case maintenance = "Maintenance"
     case shredder = "Secure Shredder"
     case fanThermal = "Fan & Thermal"
+    case homebrew = "Homebrew"
     case settings = "Settings"
 
     var id: String { rawValue }
@@ -48,6 +49,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .maintenance: return "Maintenance"
         case .shredder: return "Shredder"
         case .fanThermal: return "Fan & thermal"
+        case .homebrew: return "Homebrew"
         case .settings: return "Settings"
         }
     }
@@ -56,7 +58,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         switch self {
         case .smartScan, .scan, .largeOldFiles: return .scanner
         case .systemData, .cleanup, .smartRules, .assistant, .duplicates, .uninstaller, .privacy, .protection: return .cleanup
-        case .processes, .loginItems, .maintenance, .shredder, .fanThermal, .settings: return .system
+        case .processes, .loginItems, .maintenance, .shredder, .fanThermal, .homebrew, .settings: return .system
         }
     }
 
@@ -78,6 +80,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .maintenance: return "wrench.and.screwdriver.fill"
         case .shredder: return "flame.fill"
         case .fanThermal: return "fanblades.fill"
+        case .homebrew: return "shippingbox.fill"
         case .settings: return "gearshape.fill"
         }
     }
@@ -120,6 +123,7 @@ struct ContentView: View {
         case .maintenance: MaintenanceView()
         case .shredder: ShredderView()
         case .fanThermal: FanThermalView(viewModel: fanVM, processVM: processVM)
+        case .homebrew: BrewView()
         case .settings: SettingsView(classification: scanVM.classification, actionQueueVM: actionQueueVM, scheduledScan: scheduledScan, exclusions: scanVM.exclusions)
         }
     }
