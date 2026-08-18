@@ -20,6 +20,10 @@ struct CleanupView: View {
             if let result = viewModel.lastCleanResult {
                 cleanResultBanner(result)
             }
+            // The follow-up step: what's in the Trash and the action that actually frees it.
+            pendingTrashCard
+                .padding(.horizontal, Theme.Spacing.lg)
+                .padding(.top, viewModel.pendingTrashBytes > 0 ? Theme.Spacing.sm : 0)
 
             if viewModel.isScanning {
                 VStack(spacing: 14) {
@@ -58,7 +62,15 @@ struct CleanupView: View {
         }
         // Reuse a scan already run in Smart Scan (or a previous visit) instead of forcing a new
         // one; only pick default selections here.
-        .onAppear { viewModel.applyDefaultSelection() }
+        .onAppear { viewModel.applyDefaultSelection(); viewModel.refreshPendingTrash() }
+        // Result of emptying — states the DISK figure, and explains a snapshot-held shortfall.
+        .alert("Trash Emptied", isPresented: Binding(
+            get: { viewModel.trashMessage != nil }, set: { if !$0 { viewModel.trashMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.trashMessage ?? "")
+        }
         .onChange(of: junkStore.categories.count) { _, _ in viewModel.applyDefaultSelection() }
         // Empty Trash can fail (Automation permission) — say so instead of implying it worked.
         .alert("Couldn't Empty Trash", isPresented: Binding(
@@ -293,12 +305,47 @@ struct CleanupView: View {
     private func bannerText(_ result: CleanupViewModel.CleanResult) -> String {
         var parts: [String] = []
         if result.movedCount > 0 {
-            // Be honest about state: emptied = reclaimed on disk; not emptied = still in Trash.
+            // NEVER say "freed" for a trash move: moving to ~/.Trash is a same-volume rename that
+            // frees zero bytes. Claiming otherwise is what made "promised 30GB, got 2GB" look like
+            // a lie — the number was real, it just described movement, not reclaimed space.
             let verb = result.emptiedTrash ? "reclaimed" : "moved to Trash ·"
             parts.append("Cleaned \(result.movedCount) items · \(verb) \(result.freedBytes.formattedBytes)")
         }
         if result.emptiedTrash && result.movedCount == 0 { parts.append("Emptied the Trash") }
         return parts.isEmpty ? "Nothing to clean" : parts.joined(separator: " ")
+    }
+
+    /// Step 2 of the clean flow. Cleaning only MOVES files to the Trash, so this states plainly
+    /// that the space isn't back yet and gives the one action that actually reclaims it.
+    @ViewBuilder private var pendingTrashCard: some View {
+        if viewModel.pendingTrashBytes > 0 {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9).fill(Theme.moduleColor(.cleanup).opacity(0.18))
+                        .frame(width: 34, height: 34)
+                    Image(systemName: "trash.fill").font(.system(size: 14))
+                        .foregroundColor(Theme.moduleColor(.cleanup))
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("\(viewModel.pendingTrashBytes.formattedBytes) waiting in the Trash — not freed yet")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("\(viewModel.pendingTrashCount) item\(viewModel.pendingTrashCount == 1 ? "" : "s") · cleaning moves files here; emptying is what returns the space")
+                        .font(.system(size: 11)).foregroundColor(.secondary)
+                }
+                Spacer()
+                Button { viewModel.emptyTrashToReclaim() } label: {
+                    if viewModel.isEmptyingTrash {
+                        HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Emptying…") }
+                    } else {
+                        Text("Empty Trash to reclaim \(viewModel.pendingTrashBytes.formattedBytes)")
+                    }
+                }
+                .buttonStyle(.pill(Theme.moduleColor(.cleanup)))
+                .disabled(viewModel.isEmptyingTrash)
+            }
+            .padding(.horizontal, Theme.Spacing.md).padding(.vertical, 10)
+            .glassCard()
+        }
     }
 
     private var cleanBar: some View {

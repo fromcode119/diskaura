@@ -193,7 +193,9 @@ struct UninstallerView: View {
             Image(systemName: result.failed.isEmpty ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .foregroundColor(result.failed.isEmpty ? Theme.moduleColor(.processes) : Theme.moduleColor(.largeOldFiles))
             Text(result.failed.isEmpty
-                 ? "Moved \(result.trashedCount) items to Trash · freed \(result.freedBytes.formattedBytes)"
+                 // "moved to Trash · freed X" contradicted itself: a same-volume trash move frees
+                 // nothing. State what's recoverable and what it will free once emptied.
+                 ? "Moved \(result.trashedCount) items (\(result.freedBytes.formattedBytes)) to Trash — empty it to free that space"
                  : "Removed \(result.trashedCount) · \(result.failed.count) need admin (remove manually)")
                 .font(.system(size: 12, weight: .medium))
             Spacer()
@@ -208,7 +210,7 @@ struct UninstallerView: View {
     private func batchResultBanner(_ batch: UninstallerViewModel.BatchUninstallResult) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "checkmark.circle.fill").foregroundColor(Theme.moduleColor(.processes))
-            Text("Uninstalled \(batch.appCount) app\(batch.appCount == 1 ? "" : "s") · moved \(batch.trashedItems) items · freed \(batch.freedBytes.formattedBytes)"
+            Text("Uninstalled \(batch.appCount) app\(batch.appCount == 1 ? "" : "s") · moved \(batch.trashedItems) items (\(batch.freedBytes.formattedBytes)) to Trash"
                  + (batch.adminItems > 0 ? " · \(batch.adminItems) need admin" : ""))
                 .font(.system(size: 12, weight: .medium))
             Spacer()

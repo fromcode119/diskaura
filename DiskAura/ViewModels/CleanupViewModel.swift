@@ -18,6 +18,11 @@ final class CleanupViewModel: ObservableObject {
     /// rather than assuming it worked.
     @Published var trashMessage: String?
     @Published var trashError: String?
+    @Published var isEmptyingTrash = false
+    /// What's waiting in the Trash — cleaning only MOVES files there (a same-volume rename frees
+    /// zero bytes), so this is the amount still to be reclaimed by emptying it.
+    @Published private(set) var pendingTrashBytes: Int64 = 0
+    @Published private(set) var pendingTrashCount: Int = 0
     private var didInitSelection = false
 
     // Data mirrored from the shared store (the View also observes the store so it re-renders).
@@ -108,7 +113,9 @@ final class CleanupViewModel: ObservableObject {
             // Optimistic update — no full re-scan.
             self.store.applyCleaned(itemPaths: Set(items.map { $0.url.path }), emptiedTrash: emptyTrash)
             self.selectedCategoryIDs = self.selectedCategoryIDs.filter { id in self.categories.contains { $0.id == id } }
-            // Make the freed space visible immediately across every surface.
+            // Surface how much is now waiting in the Trash — moving files there frees nothing until
+            // it's emptied, and that gap is what made cleaning look like it did nothing.
+            self.refreshPendingTrash()
             VolumeStatsStore.shared.refresh()
         }
     }
@@ -117,22 +124,45 @@ final class CleanupViewModel: ObservableObject {
     /// free-space number. This is the missing link between "I cleaned" and "I see more free space":
     /// cleanup moves to Trash (recoverable), so free space only rises once the Trash is emptied.
     func emptyTrashToReclaim() {
+        isEmptyingTrash = true
         Task {
+            defer { isEmptyingTrash = false }
             do {
                 // Only claim it was emptied if it ACTUALLY was. A denied Apple Event used to be
                 // swallowed here, so the UI reported success over a still-full Trash.
-                let freed = try await Task.detached(priority: .userInitiated) { try TrashService.empty() }.value
+                let out = try await Task.detached(priority: .userInitiated) { try TrashService.empty() }.value
                 if var r = self.lastCleanResult {
                     r = CleanResult(movedCount: r.movedCount, freedBytes: r.freedBytes,
                                     emptiedTrash: true, restorePairs: r.restorePairs)
                     self.lastCleanResult = r
                 }
-                self.trashMessage = freed > 0 ? "Emptied the Trash — reclaimed \(freed.formattedBytes)."
-                                              : "The Trash was already empty."
+                self.trashMessage = Self.emptyOutcomeMessage(out)
             } catch {
                 self.trashError = error.localizedDescription
             }
+            self.refreshPendingTrash()
             VolumeStatsStore.shared.refresh()
+        }
+    }
+
+    /// Reports the DISK figure, not the Trash figure — they differ when snapshots pin the blocks,
+    /// which is the whole reason "I deleted 30GB and only got 2GB back" looked like a lie.
+    static func emptyOutcomeMessage(_ out: TrashService.EmptyOutcome) -> String {
+        if out.bytesRemovedFromTrash == 0 { return "The Trash was already empty." }
+        if out.heldBySnapshots {
+            return "Emptied \(out.bytesRemovedFromTrash.formattedBytes) from the Trash, but only "
+                 + "\(out.bytesReclaimedOnDisk.formattedBytes) came back so far — Time Machine's local "
+                 + "snapshots still hold the rest. macOS releases it automatically, usually within 24 hours."
+        }
+        return "Emptied the Trash — reclaimed \(out.bytesReclaimedOnDisk.formattedBytes) of disk space."
+    }
+
+    /// How much is sitting in the Trash right now: the bridge between "cleaned" and "actually freed".
+    func refreshPendingTrash() {
+        Task.detached(priority: .utility) {
+            let bytes = TrashService.size()
+            let count = TrashService.itemCount()
+            await MainActor.run { self.pendingTrashBytes = bytes; self.pendingTrashCount = count }
         }
     }
 

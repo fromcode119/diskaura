@@ -35,8 +35,9 @@ enum TrashService {
     /// Apple Event was indistinguishable from success — the UI reported "Done" with a full Trash.
     /// Returns the bytes actually reclaimed, measured before vs after.
     @discardableResult
-    static func empty() throws -> Int64 {
-        let before = size()
+    static func empty() throws -> EmptyOutcome {
+        let trashBefore = size()
+        let freeBefore = VolumeInfoService.stats(for: URL(fileURLWithPath: "/"))?.freeBytes ?? 0
         let script = """
         tell application "Finder"
             empty trash
@@ -51,7 +52,40 @@ enum TrashService {
             if code == -1743 || code == -600 { throw TrashError.automationDenied }
             throw TrashError.failed((error[NSAppleScript.errorMessage] as? String) ?? "error \(code)")
         }
-        return max(0, before - size())
+        // Finder empties asynchronously; give it a moment before measuring, or a large Trash
+        // reports as "reclaimed nothing" purely because we looked too early.
+        Thread.sleep(forTimeInterval: 1.5)
+        let removed = max(0, trashBefore - size())
+        let freeAfter = VolumeInfoService.stats(for: URL(fileURLWithPath: "/"))?.freeBytes ?? 0
+        let reclaimed = max(0, freeAfter - freeBefore)
+        // Space can leave the Trash without returning to the volume: APFS local snapshots (Time
+        // Machine) pin those blocks for up to 24h. Detect that instead of leaving the user staring
+        // at an unchanged free-space number.
+        let held = removed > 0 && reclaimed < removed / 2
+        return EmptyOutcome(bytesRemovedFromTrash: removed, bytesReclaimedOnDisk: reclaimed,
+                            heldBySnapshots: held && hasLocalSnapshots())
+    }
+
+    /// Bytes that left the Trash vs bytes that actually came back to the volume — NOT the same
+    /// number when snapshots hold the blocks, which is exactly the "I deleted 30GB and got 2GB"
+    /// confusion this reports honestly.
+    struct EmptyOutcome {
+        let bytesRemovedFromTrash: Int64
+        let bytesReclaimedOnDisk: Int64
+        let heldBySnapshots: Bool
+    }
+
+    /// True when APFS local (Time Machine) snapshots exist — they retain deleted blocks, so disk
+    /// space can lag an emptied Trash by up to 24 hours.
+    static func hasLocalSnapshots() -> Bool {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/tmutil")
+        p.arguments = ["listlocalsnapshots", "/"]
+        let pipe = Pipe(); p.standardOutput = pipe; p.standardError = Pipe()
+        do { try p.run() } catch { return false }
+        p.waitUntilExit()
+        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        return out.contains("com.apple.TimeMachine")
     }
 
     enum TrashError: Error, LocalizedError {
