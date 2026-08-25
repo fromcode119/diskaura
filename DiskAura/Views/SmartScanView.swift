@@ -19,7 +19,9 @@ struct SmartScanView: View {
                     if viewModel.trashBytes > 0 { trashReclaimRow }
                     miniStatsRow
                     if viewModel.hasScanned {
+                        if viewModel.scanning { rescanBanner }
                         findingsSection
+                            .opacity(viewModel.scanning ? 0.5 : 1)
                     } else {
                         scanCTA
                     }
@@ -52,8 +54,19 @@ struct SmartScanView: View {
             }
             Spacer()
             if viewModel.hasScanned {
-                Button { viewModel.scan() } label: { Label("Rescan", systemImage: "arrow.clockwise") }
-                    .buttonStyle(.gradientPill).disabled(viewModel.scanning)
+                Button { viewModel.scan() } label: {
+                    if viewModel.scanning {
+                        // A rescan can run up to 90s. Disabling the button alone gave no sign
+                        // anything was happening, so results just changed later out of nowhere.
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("Scanning…")
+                        }
+                    } else {
+                        Label("Rescan", systemImage: "arrow.clockwise")
+                    }
+                }
+                .buttonStyle(.gradientPill).disabled(viewModel.scanning)
             }
         }
         .padding(Theme.Spacing.md)
@@ -121,6 +134,23 @@ struct SmartScanView: View {
             }
         }
         .padding(.top, 4)
+    }
+
+    /// Shown while a RESCAN is running. The previous findings stay on screen (dimmed) so the tab
+    /// never looks empty, but it's explicit that they're stale and being replaced.
+    private var rescanBanner: some View {
+        HStack(spacing: 10) {
+            ProgressView().controlSize(.small)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Rescanning…").font(.system(size: 12.5, weight: .semibold))
+                Text("Checking caches, developer junk and the Trash. Results below are from the last scan until this finishes.")
+                    .font(.system(size: 10.5)).foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .glassCard()
     }
 
     private var findingsSection: some View {
